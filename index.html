@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Maximum Reality: Cyber Alley</title>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            image-rendering: pixelated; /* Keeps that 8-bit crispness */
+            background: linear-gradient(to bottom, #2d004b, #8a2be2, #ff00ff);
+        }
+        .ui-layer {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            color: #0ff;
+            text-shadow: 0 0 10px #0ff;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="ui-layer">
+        <div id="score">SCORE: 000000</div>
+        <div id="status">SYSTEMS ONLINE</div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Handle Resize for iPhone Pro Max
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Game Variables
+    let gameSpeed = 5;
+    let frame = 0;
+
+    // Character Mockup
+    class Entity {
+        constructor(name, xOffset, color) {
+            this.name = name;
+            this.x = xOffset;
+            this.y = canvas.height - 150;
+            this.color = color;
+            this.width = 40;
+            this.height = 60;
+        }
+
+        draw() {
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+            ctx.fillStyle = "white";
+            ctx.fillText(this.name, this.x, this.y - 10);
+        }
+    }
+
+    const team = [
+        new Entity("YOU", 50, "#00ffff"),
+        new Entity("AZUL", 110, "#silver"),
+        new Entity("MOCHKIL", 170, "#f5deb3")
+    ];
+
+    function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. Draw "Cyber Alley" Floor
+        ctx.strokeStyle = "#ff00ff";
+        ctx.lineWidth = 2;
+        for(let i = 0; i < 10; i++) {
+            let lineY = (canvas.height - 100) + (i * 20) + (frame % 20);
+            ctx.beginPath();
+            ctx.moveTo(0, lineY);
+            ctx.lineTo(canvas.width, lineY);
+            ctx.stroke();
+        }
+
+        // 2. Draw Characters
+        team.forEach(member => member.draw());
+
+        frame += gameSpeed;
+        requestAnimationFrame(animate);
+    }
+
+    animate();
+</script>
+</body>
+</html>
