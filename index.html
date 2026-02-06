@@ -35,7 +35,7 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
 
-// --- CONFIG & SCALING ---
+// --- CONFIG ---
 const CHAR_SIZE = 100;
 const GROUND_Y_OFFSET = 120;
 const gravity = 1.2;
@@ -55,13 +55,23 @@ let gameObjects = [];
 let exitPortal = null;
 let slowMoTimer = 0;
 
-// Asset Preloading
+// --- POOLS ---
+const obstaclePool = [
+    'dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 
+    'overflowing-trashcan.png', 'fish-bones.png', 'smashed-can.png', 
+    'smashed-juice-box.png', 'smashed-soda-can.png', 'rubber_duck.png'
+];
+
+const snackPool = [
+    'swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 
+    'frying-pan.png', 'roast-chicken.png', 'cupcake.png', 'strawberry-candy.png',
+    'pancake_stack.png', 'chips.png', 'cookies.png', 'hotdog.png', 'banana.png',
+    'bread-slice.png', 'chicken_leg.png', 'ham.png', 'orange_juice.png'
+];
+
 const assets = {};
 const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'floor.png'];
-toLoad.forEach(src => {
-    assets[src] = new Image();
-    assets[src].src = BASE_URL + src;
-});
+toLoad.forEach(src => { assets[src] = new Image(); assets[src].src = BASE_URL + src; });
 
 function resize() {
     canvas.width = window.innerWidth;
@@ -70,7 +80,7 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-// --- LOGIC FUNCTIONS ---
+// --- LOGIC ---
 function triggerQuantumShift() {
     slowMoTimer = 180;
     gameSpeed = baseSpeed * 0.4;
@@ -95,15 +105,8 @@ function updateMochkilCombo(isSnack) {
 // --- CLASSES ---
 class Player {
     constructor(name, x, yOffset, sprites) {
-        this.name = name;
-        this.x = x;
-        this.baseX = x;
-        this.baseYOffset = yOffset;
-        this.sprites = sprites.map(file => {
-            const img = new Image();
-            img.src = BASE_URL + file;
-            return img;
-        });
+        this.name = name; this.x = x; this.baseX = x; this.baseYOffset = yOffset;
+        this.sprites = sprites.map(file => { const img = new Image(); img.src = BASE_URL + file; return img; });
         this.frameIndex = 0;
     }
     draw() {
@@ -111,15 +114,10 @@ class Player {
         if (frame % animSpeed === 0) this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
         const currentImg = this.sprites[this.frameIndex];
         const drawY = (canvas.height - GROUND_Y_OFFSET) - jumpHeight;
-
         if (currentImg.complete) {
             ctx.save();
-            if (this.name === 'mochkil' && comboGlow > 0) {
-                ctx.shadowBlur = comboGlow; ctx.shadowColor = "#fffb00"; comboGlow--;
-            }
-            if (this.name === 'azul' && slowMoTimer > 0) {
-                ctx.shadowBlur = 15; ctx.shadowColor = "#0ff";
-            }
+            if (this.name === 'mochkil' && comboGlow > 0) { ctx.shadowBlur = comboGlow; ctx.shadowColor = "#fffb00"; }
+            if (this.name === 'azul' && slowMoTimer > 0) { ctx.shadowBlur = 15; ctx.shadowColor = "#0ff"; }
             ctx.drawImage(currentImg, this.x, drawY, CHAR_SIZE, CHAR_SIZE); 
             ctx.restore();
         }
@@ -130,48 +128,33 @@ const lori = new Player("lori", 50, 100, ['lori-run.png', 'lori-run2.png']);
 const azul = new Player("azul", 140, 100, ['azul-run.png', 'azul-run2.png']);
 const mochkil = new Player("mochkil", 230, 100, ['mochkil-idle.png', 'mochkil-cheese.png']);
 
-const obstacles = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png'];
-const snacks = ['swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'frying-pan.png'];
-
 class GameObject {
     constructor(type) {
         this.type = type;
-        const list = type === 'obstacle' ? obstacles : snacks;
-        this.file = list[Math.floor(Math.random() * list.length)];
+        const pool = type === 'obstacle' ? obstaclePool : snackPool;
+        this.file = pool[Math.floor(Math.random() * pool.length)];
         this.img = new Image();
         this.img.src = BASE_URL + this.file;
         this.x = canvas.width + 100;
         this.collected = false;
 
-        if (this.file.includes('truck')) {
-            this.w = 200; this.h = 120; this.y = canvas.height - 210;
-        } else if (type === 'obstacle') {
-            this.w = 80; this.h = 80; this.y = canvas.height - 180;
-        } else {
-            this.w = 60; this.h = 60; this.y = canvas.height - (220 + Math.random() * 120);
-        }
+        if (this.file.includes('truck')) { this.w = 220; this.h = 130; this.y = canvas.height - 220; }
+        else if (this.file.includes('dumpster') || this.file.includes('overflowing')) { this.w = 110; this.h = 110; this.y = canvas.height - 200; }
+        else { this.w = 70; this.h = 70; this.y = type === 'obstacle' ? canvas.height - 160 : canvas.height - (220 + Math.random() * 150); }
     }
     update() {
         this.x -= gameSpeed;
-
-        // Collision for Obstacles (Lori)
         let loriY = (canvas.height - GROUND_Y_OFFSET) - jumpHeight;
         if (!this.collected && this.type === 'obstacle') {
-            if (lori.x < this.x + (this.w - 20) && lori.x + 60 > this.x && 
-                loriY < this.y + (this.h - 20) && loriY + 80 > this.y) {
-                updateMochkilCombo(false);
-                gameState = 'GAMEOVER';
+            if (lori.x < this.x + this.w - 20 && lori.x + 60 > this.x && loriY < this.y + this.h - 20 && loriY + 80 > this.y) {
+                updateMochkilCombo(false); gameState = 'GAMEOVER';
             }
         }
-
-        // Collision for Snacks (Mochkil)
         if (!this.collected && this.type === 'snack') {
             let mY = canvas.height - GROUND_Y_OFFSET;
-            if (mochkil.x < this.x + this.w && mochkil.x + CHAR_SIZE > this.x && 
-                mY < this.y + this.h && mY + CHAR_SIZE > this.y) {
+            if (mochkil.x < this.x + this.w && mochkil.x + CHAR_SIZE > this.x && mY < this.y + this.h && mY + CHAR_SIZE > this.y) {
                 this.collected = true; score += 150; snacksCollected++;
-                updateMochkilCombo(true);
-                mochkil.frameIndex = 1;
+                updateMochkilCombo(true); mochkil.frameIndex = 1;
                 setTimeout(() => { if(gameState==='PLAYING') mochkil.frameIndex = 0; }, 300);
                 if (snacksCollected % 3 === 0) triggerQuantumShift();
                 if (snacksCollected >= 10 && !exitPortal) exitPortal = new Portal();
@@ -182,49 +165,30 @@ class GameObject {
 }
 
 class Portal {
-    constructor() {
-        this.img = new Image(); this.img.src = BASE_URL + 'snack-portal.png';
-        this.x = canvas.width + 200; this.y = canvas.height - 300;
-    }
+    constructor() { this.img = new Image(); this.img.src = BASE_URL + 'snack-portal.png'; this.x = canvas.width + 200; this.y = canvas.height - 300; }
     update() {
         this.x -= gameSpeed;
-        if (this.img.complete) {
-            ctx.shadowBlur = 20; ctx.shadowColor = "#ff00ff";
-            ctx.drawImage(this.img, this.x, this.y, 120, 180); ctx.shadowBlur = 0;
-        }
+        if (this.img.complete) { ctx.shadowBlur = 20; ctx.shadowColor = "#ff00ff"; ctx.drawImage(this.img, this.x, this.y, 120, 180); ctx.shadowBlur = 0; }
         if (this.x < lori.x + 20) gameState = 'CLEAR';
     }
 }
 
-// --- DRAWING ---
+// --- CORE LOOPS ---
 function drawBackground() {
     const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
     grad.addColorStop(0, "#2b002b"); grad.addColorStop(1, "#ff007f");
     ctx.fillStyle = grad; ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const layers = [
-        { src: 'gg-bg.png', s: 0.2, op: 0.2, h: 400 },
-        { src: 'building-c.png', s: 0.8, op: 0.4, h: 450 },
-        { src: 'building-b.png', s: 1.5, op: 0.6, h: 350 },
-        { src: 'building-a.png', s: 2.5, op: 0.8, h: 250 }
-    ];
-
+    const layers = [{ src: 'gg-bg.png', s: 0.2, op: 0.2, h: 400 }, { src: 'building-c.png', s: 0.8, op: 0.4, h: 450 }, { src: 'building-b.png', s: 1.5, op: 0.6, h: 350 }, { src: 'building-a.png', s: 2.5, op: 0.8, h: 250 }];
     layers.forEach(l => {
         let xPos = -(frame * l.s) % canvas.width;
         ctx.globalAlpha = l.op;
-        if (assets[l.src].complete) {
-            ctx.drawImage(assets[l.src], xPos, canvas.height - l.h - 50, canvas.width, l.h);
-            ctx.drawImage(assets[l.src], xPos + canvas.width, canvas.height - l.h - 50, canvas.width, l.h);
-        }
+        if (assets[l.src].complete) { ctx.drawImage(assets[l.src], xPos, canvas.height - l.h - 50, canvas.width, l.h); ctx.drawImage(assets[l.src], xPos + canvas.width, canvas.height - l.h - 50, canvas.width, l.h); }
     });
-
     ctx.globalAlpha = 1;
     let fx = -(frame * 5) % 50;
     if (assets['floor.png'].complete) {
         ctx.save(); ctx.shadowBlur = 15; ctx.shadowColor = "#ff00ff";
-        for (let i = 0; i < (canvas.width / 50) + 2; i++) {
-            ctx.drawImage(assets['floor.png'], fx + (i * 50), canvas.height - 100, 50, 100);
-        }
+        for (let i = 0; i < (canvas.width / 50) + 2; i++) { ctx.drawImage(assets['floor.png'], fx + (i * 50), canvas.height - 100, 50, 100); }
         ctx.restore();
     }
 }
@@ -234,11 +198,7 @@ function handleJump() {
     else if (!isJumping && gameState === 'PLAYING') { isJumping = true; yVelocity = -20; }
 }
 
-function resetGame() {
-    score = 0; snacksCollected = 0; gameObjects = []; exitPortal = null;
-    gameSpeed = baseSpeed; frame = 0; gameState = 'PLAYING';
-    document.getElementById('status').innerText = "SYSTEMS ONLINE";
-}
+function resetGame() { score = 0; snacksCollected = 0; gameObjects = []; exitPortal = null; gameSpeed = baseSpeed; frame = 0; gameState = 'PLAYING'; document.getElementById('status').innerText = "SYSTEMS ONLINE"; }
 
 window.addEventListener('touchstart', (e) => { e.preventDefault(); handleJump(); });
 window.addEventListener('mousedown', handleJump);
@@ -246,39 +206,23 @@ window.addEventListener('mousedown', handleJump);
 function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackground();
-
     if (gameState === 'PLAYING') {
         frame++;
-        if (slowMoTimer > 0) {
-            slowMoTimer--;
-            if (slowMoTimer === 0) { gameSpeed = baseSpeed; document.getElementById('status').innerText = "SYSTEMS ONLINE"; }
-        }
+        if (slowMoTimer > 0) { slowMoTimer--; if (slowMoTimer === 0) { gameSpeed = baseSpeed; document.getElementById('status').innerText = "SYSTEMS ONLINE"; } }
         if (frame % 100 === 0) gameObjects.push(new GameObject(Math.random() > 0.4 ? 'obstacle' : 'snack'));
-        if (isJumping) {
-            jumpHeight -= yVelocity; yVelocity += gravity;
-            if (jumpHeight <= 0) { jumpHeight = 0; isJumping = false; }
-        }
-        gameObjects.forEach((obj, i) => {
-            obj.update();
-            if (obj.x < -200) gameObjects.splice(i, 1);
-        });
+        if (isJumping) { jumpHeight -= yVelocity; yVelocity += gravity; if (jumpHeight <= 0) { jumpHeight = 0; isJumping = false; } }
+        gameObjects.forEach((obj, i) => { obj.update(); if (obj.x < -200) gameObjects.splice(i, 1); });
         if (exitPortal) exitPortal.update();
         document.getElementById('scoreDisplay').innerText = `SCORE: ${score}`;
     }
-
     lori.draw(); azul.draw(); mochkil.draw();
-
     if (gameState === 'START' || gameState === 'GAMEOVER') {
         ctx.fillStyle = "rgba(0,0,0,0.85)"; ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#0ff"; ctx.textAlign = "center"; ctx.font = "24px Courier";
         ctx.fillText(gameState === 'START' ? "MAXIMUM REALITY" : "CONNECTION LOST", canvas.width/2, canvas.height/2 - 20);
         ctx.fillText("TAP TO CONNECT", canvas.width/2, canvas.height/2 + 20);
     }
-    if (gameState === 'CLEAR') {
-        ctx.fillStyle = "rgba(0,0,0,0.9)"; ctx.fillRect(0,0,canvas.width, canvas.height);
-        ctx.fillStyle = "#ff00ff"; ctx.font = "30px Courier"; ctx.textAlign = "center";
-        ctx.fillText("STAGE CLEAR", canvas.width/2, canvas.height/2);
-    }
+    if (gameState === 'CLEAR') { ctx.fillStyle = "rgba(0,0,0,0.9)"; ctx.fillRect(0,0,canvas.width, canvas.height); ctx.fillStyle = "#ff00ff"; ctx.font = "30px Courier"; ctx.textAlign = "center"; ctx.fillText("STAGE CLEAR", canvas.width/2, canvas.height/2); }
     requestAnimationFrame(animate);
 }
 animate();
