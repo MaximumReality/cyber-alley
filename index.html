@@ -138,6 +138,74 @@ function animate() {
 
 animate();
 
+    const obstacles = [
+    'dumpster.png', 
+    'metal_trashcan.png', 
+    'overflowing-trashcan.png', 
+    'garbage-truck.png', 
+    'smashed-soda-can.png', 
+    'smashed-juice-box.png'
+];
+
+// High priority snacks for the Chef
+const snacks = [
+    'swiss-cheese.png', 
+    'pizza-slice.png', 
+    'pancake_stack.png', 
+    'frying-pan.png', // Verified: lowercase 'f'
+    'pink-donut.png',
+    'roast-chicken.png',
+    'cheeseburger.png'
+];
+
+class GameObject {
+    constructor(type) {
+        this.type = type;
+        const list = type === 'obstacle' ? obstacles : snacks;
+        this.file = list[Math.floor(Math.random() * list.length)];
+        
+        this.img = new Image();
+        this.img.src = BASE_URL + this.file;
+        
+        this.x = canvas.width + 100;
+        this.y = type === 'obstacle' ? canvas.height - 130 : canvas.height - 220;
+        this.width = 60;
+        this.height = 60;
+        this.collected = false;
+    }
+
+    update() {
+        this.x -= gameSpeed;
+
+        // 👨‍🍳 MOCHKIL'S SNACK ATTACK LOGIC
+        // If a snack is on screen, Mochkil "breaks formation" to grab it
+        if (this.type === 'snack' && !this.collected) {
+            let distanceToMochkil = this.x - mochkil.x;
+            
+            if (distanceToMochkil < 200 && distanceToMochkil > 0) {
+                // Mochkil speeds up to reach the snack
+                mochkil.x += 2; 
+                mochkil.frameIndex = 1; // Show him eating/excited
+            } else if (mochkil.x > 230) { 
+                // Return to original position after snack passes or is caught
+                mochkil.x -= 1;
+            }
+        }
+
+        if (this.img.complete && !this.collected) {
+            ctx.drawImage(this.img, this.x, this.y, this.width, this.height);
+        }
+        
+        // Collision Detection
+        if (!this.collected && this.x < (mochkil.x + 40) && this.x + this.width > mochkil.x) {
+            this.collected = true;
+            score += 50;
+            console.log("Mochkil grabbed the " + this.file + "!");
+        }
+    }
+}
+
+
 </script>
 </body>
 </html>
