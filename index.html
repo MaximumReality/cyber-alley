@@ -5,52 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Maximum Reality: Cyber Alley</title>
     <style>
-        body {
-            margin: 0;
-            background: #000;
-            overflow: hidden;
-            font-family: 'Courier New', Courier, monospace;
-        }
-        #gameCanvas {
-            display: block;
-            width: 100vw;
-            height: 100vh;
-            image-rendering: pixelated;
-            background: linear-gradient(to bottom, #2d004b, #8a2be2, #ff00ff);
-        }
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
+        #gameCanvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
         .ui-layer {
-            position: absolute;
-            top: 20px;
-            width: 100%;
-            text-align: center;
-            color: #0ff;
-            text-shadow: 0 0 10px #0ff;
-            pointer-events: none;
-            padding-top: env(safe-area-inset-top);
+            position: absolute; top: 20px; width: 100%; text-align: center;
+            color: #0ff; text-shadow: 0 0 10px #0ff; pointer-events: none;
+            padding-top: env(safe-area-inset-top); z-index: 5;
         }
         .crt-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), 
                         linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
-            background-size: 100% 4px, 3px 100%;
-            pointer-events: none;
-            z-index: 10;
+            background-size: 100% 4px, 3px 100%; pointer-events: none; z-index: 10;
         }
-        @keyframes flicker {
-            0% { opacity: 0.97; }
-            5% { opacity: 0.95; }
-            10% { opacity: 0.9; }
-            100% { opacity: 1; }
-        }
+        @keyframes flicker { 0% { opacity: 0.97; } 5% { opacity: 0.95; } 10% { opacity: 0.9; } 100% { opacity: 1; } }
         .crt-flicker { animation: flicker 0.15s infinite; }
     </style>
 </head>
 <body>
-
     <div class="crt-overlay crt-flicker"></div>
     <div class="ui-layer">
         <div id="scoreDisplay">SCORE: 0</div>
@@ -63,11 +35,10 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
 
-// --- Game State ---
 let gameState = 'START'; 
 let score = 0;
-let gameSpeed = 5;
 let baseSpeed = 5;
+let gameSpeed = 0; 
 let frame = 0;
 let isJumping = false;
 let jumpHeight = 0;
@@ -79,6 +50,14 @@ let gameObjects = [];
 let exitPortal = null;
 let slowMoTimer = 0;
 
+// Asset Preloading
+const assets = {};
+const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'floor.png'];
+toLoad.forEach(src => {
+    assets[src] = new Image();
+    assets[src].src = BASE_URL + src;
+});
+
 function resize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -86,7 +65,6 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-// --- Player Class ---
 class Player {
     constructor(name, x, yOffset, sprites) {
         this.name = name;
@@ -100,21 +78,14 @@ class Player {
         });
         this.frameIndex = 0;
     }
-
     draw() {
-        // Animation speed adjusts with game speed
         let animSpeed = slowMoTimer > 0 ? 16 : 8;
-        if (frame % animSpeed === 0) {
-            this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
-        }
+        if (frame % animSpeed === 0) this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
         const currentImg = this.sprites[this.frameIndex];
         const drawY = (canvas.height - this.baseYOffset) - jumpHeight;
-        
         if (currentImg.complete) {
-            // Azul glows when Time is warped
             if (this.name === 'azul' && slowMoTimer > 0) {
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = "#0ff";
+                ctx.shadowBlur = 15; ctx.shadowColor = "#0ff";
             }
             ctx.drawImage(currentImg, this.x, drawY, 80, 80); 
             ctx.shadowBlur = 0;
@@ -126,9 +97,8 @@ const lori = new Player("lori", 50, 180, ['lori-run.png', 'lori-run2.png']);
 const azul = new Player("azul", 140, 170, ['azul-run.png', 'azul-run2.png']);
 const mochkil = new Player("mochkil", 230, 140, ['mochkil-idle.png', 'mochkil-cheese.png']);
 
-// --- Objects ---
 const obstacles = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png'];
-const snacks = ['swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png'];
+const snacks = ['swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'frying-pan.png'];
 
 class GameObject {
     constructor(type) {
@@ -139,60 +109,32 @@ class GameObject {
         this.img.src = BASE_URL + this.file;
         this.x = canvas.width + 100;
         this.y = type === 'obstacle' ? canvas.height - 130 : canvas.height - 220;
-        this.width = 60;
-        this.height = 60;
-        this.hitbox = { x: this.x + 10, y: this.y + 10, w: 40, h: 40 };
         this.collected = false;
     }
-
     update() {
         this.x -= gameSpeed;
-        this.hitbox.x = this.x + 10;
-
-        // Mochkil's Snack Attack
         if (this.type === 'snack' && !this.collected) {
             let dist = this.x - mochkil.x;
-            if (dist < 200 && dist > 0) {
-                mochkil.x += 2;
-                mochkil.frameIndex = 1;
-            } else if (mochkil.x > mochkil.baseX) {
-                mochkil.x -= 1;
-            }
+            if (dist < 200 && dist > 0) { mochkil.x += 2; mochkil.frameIndex = 1; }
+            else if (mochkil.x > mochkil.baseX) { mochkil.x -= 1; }
         }
-
-        // Collision Logic
         if (!this.collected) {
             let loriY = (canvas.height - lori.baseYOffset) - jumpHeight;
-            // Check if Lori's box overlaps with item box
-            if (lori.x < this.hitbox.x + this.hitbox.w &&
-                lori.x + 40 > this.hitbox.x &&
-                loriY < this.hitbox.y + this.hitbox.h &&
-                loriY + 60 > this.hitbox.y) {
-                
-                if (this.type === 'obstacle') {
-                    gameState = 'GAMEOVER';
-                } else {
-                    this.collected = true;
-                    score += 150;
-                    snacksCollected++;
-                    // AZUL'S QUANTUM SHIFT: Every 3 snacks, slow time
+            if (lori.x < this.x + 40 && lori.x + 40 > this.x && loriY < this.y + 40 && loriY + 60 > this.y) {
+                if (this.type === 'obstacle') { gameState = 'GAMEOVER'; } 
+                else {
+                    this.collected = true; score += 150; snacksCollected++;
                     if (snacksCollected % 3 === 0) triggerQuantumShift();
-                    
-                    if (snacksCollected >= GOAL_SNACKS && !exitPortal) {
-                        exitPortal = new Portal();
-                    }
+                    if (snacksCollected >= GOAL_SNACKS && !exitPortal) exitPortal = new Portal();
                 }
             }
         }
-
-        if (this.img.complete && !this.collected) {
-            ctx.drawImage(this.img, this.x, this.y, this.width, this.height);
-        }
+        if (this.img.complete && !this.collected) ctx.drawImage(this.img, this.x, this.y, 60, 60);
     }
 }
 
 function triggerQuantumShift() {
-    slowMoTimer = 180; // ~3 seconds at 60fps
+    slowMoTimer = 180;
     gameSpeed = baseSpeed * 0.4;
     document.getElementById('status').innerText = "QUANTUM SHIFT ACTIVE";
 }
@@ -207,8 +149,7 @@ class Portal {
     update() {
         this.x -= gameSpeed;
         if (this.img.complete) {
-            ctx.shadowBlur = 20;
-            ctx.shadowColor = "#ff00ff";
+            ctx.shadowBlur = 20; ctx.shadowColor = "#ff00ff";
             ctx.drawImage(this.img, this.x, this.y, 120, 150);
             ctx.shadowBlur = 0;
         }
@@ -216,108 +157,98 @@ class Portal {
     }
 }
 
-// --- Controls ---
-function handleJump() {
-    if (gameState === 'START' || gameState === 'GAMEOVER') {
-        resetGame();
-        gameState = 'PLAYING';
-    } else if (!isJumping && gameState === 'PLAYING') {
-        isJumping = true;
-        yVelocity = -20;
+function drawBackground() {
+    // 1. Sky
+    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    grad.addColorStop(0, "#2b002b"); grad.addColorStop(1, "#ff007f");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 2. Parallax
+    const layers = [
+        { src: 'gg-bg.png', s: 0.2, op: 0.2, h: 400 },
+        { src: 'building-c.png', s: 0.8, op: 0.4, h: 450 },
+        { src: 'building-b.png', s: 1.5, op: 0.6, h: 350 },
+        { src: 'building-a.png', s: 2.5, op: 0.8, h: 250 }
+    ];
+
+    layers.forEach(l => {
+        let xPos = -(frame * l.s) % canvas.width;
+        ctx.globalAlpha = l.op;
+        if (assets[l.src].complete) {
+            ctx.drawImage(assets[l.src], xPos, canvas.height - l.h - 50, canvas.width, l.h);
+            ctx.drawImage(assets[l.src], xPos + canvas.width, canvas.height - l.h - 50, canvas.width, l.h);
+        }
+    });
+
+    // 3. Floor
+    ctx.globalAlpha = 1;
+    let fx = -(frame * 5) % 50;
+    if (assets['floor.png'].complete) {
+        ctx.save();
+        ctx.shadowBlur = 15; ctx.shadowColor = "#ff00ff";
+        for (let i = 0; i < (canvas.width / 50) + 2; i++) {
+            ctx.drawImage(assets['floor.png'], fx + (i * 50), canvas.height - 100, 50, 100);
+        }
+        ctx.restore();
     }
 }
 
+function handleJump() {
+    if (gameState === 'START' || gameState === 'GAMEOVER') resetGame();
+    else if (!isJumping && gameState === 'PLAYING') { isJumping = true; yVelocity = -20; }
+}
+
 function resetGame() {
-    score = 0;
-    snacksCollected = 0;
-    gameObjects = [];
-    exitPortal = null;
-    gameSpeed = baseSpeed;
-    frame = 0;
+    score = 0; snacksCollected = 0; gameObjects = []; exitPortal = null;
+    gameSpeed = baseSpeed; frame = 0; gameState = 'PLAYING';
     document.getElementById('status').innerText = "SYSTEMS ONLINE";
 }
 
 window.addEventListener('touchstart', (e) => { e.preventDefault(); handleJump(); });
 window.addEventListener('mousedown', handleJump);
 
-function drawCyberFloor() {
-    ctx.strokeStyle = slowMoTimer > 0 ? "#0ff" : "#ff00ff";
-    ctx.lineWidth = 2;
-    for(let i = 0; i < 8; i++) {
-        let lineY = (canvas.height - 100) + (i * 25) + (frame % 25);
-        ctx.beginPath();
-        ctx.moveTo(0, lineY);
-        ctx.lineTo(canvas.width, lineY);
-        ctx.stroke();
-    }
-}
-
 function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawCyberFloor();
+    drawBackground();
 
     if (gameState === 'PLAYING') {
         frame++;
-        
-        // Handle Slow-Mo Timer
         if (slowMoTimer > 0) {
             slowMoTimer--;
-            if (slowMoTimer === 0) {
-                gameSpeed = baseSpeed;
-                document.getElementById('status').innerText = "SYSTEMS ONLINE";
-            }
+            if (slowMoTimer === 0) { gameSpeed = baseSpeed; document.getElementById('status').innerText = "SYSTEMS ONLINE"; }
         }
-
-        if (frame % 100 === 0) {
-            gameObjects.push(new GameObject(Math.random() > 0.4 ? 'obstacle' : 'snack'));
-        }
+        if (frame % 100 === 0) gameObjects.push(new GameObject(Math.random() > 0.4 ? 'obstacle' : 'snack'));
         
         if (isJumping) {
-            jumpHeight -= yVelocity;
-            yVelocity += gravity;
+            jumpHeight -= yVelocity; yVelocity += gravity;
             if (jumpHeight <= 0) { jumpHeight = 0; isJumping = false; }
         }
 
-        gameObjects.forEach((obj, index) => {
+        gameObjects.forEach((obj, i) => {
             obj.update();
-            if (obj.x < -100) gameObjects.splice(index, 1);
+            if (obj.x < -100) gameObjects.splice(i, 1);
         });
-
         if (exitPortal) exitPortal.update();
         document.getElementById('scoreDisplay').innerText = `SCORE: ${score}`;
     }
 
-    lori.draw();
-    azul.draw();
-    mochkil.draw();
+    lori.draw(); azul.draw(); mochkil.draw();
 
-    // UI Overlays
     if (gameState === 'START' || gameState === 'GAMEOVER') {
-        ctx.fillStyle = "rgba(0,0,0,0.85)";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#0ff";
-        ctx.textAlign = "center";
-        ctx.font = "24px Courier";
-        let msg = gameState === 'START' ? "MAXIMUM REALITY" : "CONNECTION LOST";
-        ctx.fillText(msg, canvas.width/2, canvas.height/2 - 20);
-        ctx.font = "16px Courier";
+        ctx.fillStyle = "rgba(0,0,0,0.85)"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#0ff"; ctx.textAlign = "center"; ctx.font = "24px Courier";
+        ctx.fillText(gameState === 'START' ? "MAXIMUM REALITY" : "CONNECTION LOST", canvas.width/2, canvas.height/2 - 20);
         ctx.fillText("TAP TO CONNECT", canvas.width/2, canvas.height/2 + 20);
     }
-
     if (gameState === 'CLEAR') {
-        ctx.fillStyle = "rgba(0,0,0,0.9)";
-        ctx.fillRect(0,0,canvas.width, canvas.height);
-        ctx.fillStyle = "#ff00ff";
-        ctx.font = "30px Courier";
-        ctx.textAlign = "center";
+        ctx.fillStyle = "rgba(0,0,0,0.9)"; ctx.fillRect(0,0,canvas.width, canvas.height);
+        ctx.fillStyle = "#ff00ff"; ctx.font = "30px Courier"; ctx.textAlign = "center";
         ctx.fillText("STAGE CLEAR", canvas.width/2, canvas.height/2);
     }
-
     requestAnimationFrame(animate);
 }
-
 animate();
-
 </script>
 </body>
 </html>
