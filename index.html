@@ -35,6 +35,11 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
 
+// --- CONFIG & SCALING ---
+const CHAR_SIZE = 100;
+const GROUND_Y_OFFSET = 120;
+const gravity = 1.2;
+
 let gameState = 'START'; 
 let score = 0;
 let baseSpeed = 5;
@@ -43,9 +48,9 @@ let frame = 0;
 let isJumping = false;
 let jumpHeight = 0;
 let yVelocity = 0;
-const gravity = 1.2;
 let snacksCollected = 0;
-const GOAL_SNACKS = 10;
+let snackCombo = 0;
+let comboGlow = 0;
 let gameObjects = [];
 let exitPortal = null;
 let slowMoTimer = 0;
@@ -65,6 +70,29 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
+// --- LOGIC FUNCTIONS ---
+function triggerQuantumShift() {
+    slowMoTimer = 180;
+    gameSpeed = baseSpeed * 0.4;
+    document.getElementById('status').innerText = "QUANTUM SHIFT ACTIVE";
+}
+
+function updateMochkilCombo(isSnack) {
+    if (isSnack) {
+        snackCombo++;
+        comboGlow = 30;
+        if (snackCombo >= 3) {
+            score += 500;
+            document.getElementById('status').innerText = "MICHELIN STAR SNACK ATTACK!";
+            gameSpeed = baseSpeed * 1.5;
+            setTimeout(() => { gameSpeed = baseSpeed; snackCombo = 0; }, 2000);
+        }
+    } else {
+        snackCombo = 0;
+    }
+}
+
+// --- CLASSES ---
 class Player {
     constructor(name, x, yOffset, sprites) {
         this.name = name;
@@ -82,20 +110,25 @@ class Player {
         let animSpeed = slowMoTimer > 0 ? 16 : 8;
         if (frame % animSpeed === 0) this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
         const currentImg = this.sprites[this.frameIndex];
-        const drawY = (canvas.height - this.baseYOffset) - jumpHeight;
+        const drawY = (canvas.height - GROUND_Y_OFFSET) - jumpHeight;
+
         if (currentImg.complete) {
+            ctx.save();
+            if (this.name === 'mochkil' && comboGlow > 0) {
+                ctx.shadowBlur = comboGlow; ctx.shadowColor = "#fffb00"; comboGlow--;
+            }
             if (this.name === 'azul' && slowMoTimer > 0) {
                 ctx.shadowBlur = 15; ctx.shadowColor = "#0ff";
             }
-            ctx.drawImage(currentImg, this.x, drawY, 80, 80); 
-            ctx.shadowBlur = 0;
+            ctx.drawImage(currentImg, this.x, drawY, CHAR_SIZE, CHAR_SIZE); 
+            ctx.restore();
         }
     }
 }
 
-const lori = new Player("lori", 50, 180, ['lori-run.png', 'lori-run2.png']);
-const azul = new Player("azul", 140, 170, ['azul-run.png', 'azul-run2.png']);
-const mochkil = new Player("mochkil", 230, 140, ['mochkil-idle.png', 'mochkil-cheese.png']);
+const lori = new Player("lori", 50, 100, ['lori-run.png', 'lori-run2.png']);
+const azul = new Player("azul", 140, 100, ['azul-run.png', 'azul-run2.png']);
+const mochkil = new Player("mochkil", 230, 100, ['mochkil-idle.png', 'mochkil-cheese.png']);
 
 const obstacles = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png'];
 const snacks = ['swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'frying-pan.png'];
@@ -108,63 +141,67 @@ class GameObject {
         this.img = new Image();
         this.img.src = BASE_URL + this.file;
         this.x = canvas.width + 100;
-        this.y = type === 'obstacle' ? canvas.height - 130 : canvas.height - 220;
         this.collected = false;
+
+        if (this.file.includes('truck')) {
+            this.w = 200; this.h = 120; this.y = canvas.height - 210;
+        } else if (type === 'obstacle') {
+            this.w = 80; this.h = 80; this.y = canvas.height - 180;
+        } else {
+            this.w = 60; this.h = 60; this.y = canvas.height - (220 + Math.random() * 120);
+        }
     }
     update() {
         this.x -= gameSpeed;
-        if (this.type === 'snack' && !this.collected) {
-            let dist = this.x - mochkil.x;
-            if (dist < 200 && dist > 0) { mochkil.x += 2; mochkil.frameIndex = 1; }
-            else if (mochkil.x > mochkil.baseX) { mochkil.x -= 1; }
-        }
-        if (!this.collected) {
-            let loriY = (canvas.height - lori.baseYOffset) - jumpHeight;
-            if (lori.x < this.x + 40 && lori.x + 40 > this.x && loriY < this.y + 40 && loriY + 60 > this.y) {
-                if (this.type === 'obstacle') { gameState = 'GAMEOVER'; } 
-                else {
-                    this.collected = true; score += 150; snacksCollected++;
-                    if (snacksCollected % 3 === 0) triggerQuantumShift();
-                    if (snacksCollected >= GOAL_SNACKS && !exitPortal) exitPortal = new Portal();
-                }
+
+        // Collision for Obstacles (Lori)
+        let loriY = (canvas.height - GROUND_Y_OFFSET) - jumpHeight;
+        if (!this.collected && this.type === 'obstacle') {
+            if (lori.x < this.x + (this.w - 20) && lori.x + 60 > this.x && 
+                loriY < this.y + (this.h - 20) && loriY + 80 > this.y) {
+                updateMochkilCombo(false);
+                gameState = 'GAMEOVER';
             }
         }
-        if (this.img.complete && !this.collected) ctx.drawImage(this.img, this.x, this.y, 60, 60);
-    }
-}
 
-function triggerQuantumShift() {
-    slowMoTimer = 180;
-    gameSpeed = baseSpeed * 0.4;
-    document.getElementById('status').innerText = "QUANTUM SHIFT ACTIVE";
+        // Collision for Snacks (Mochkil)
+        if (!this.collected && this.type === 'snack') {
+            let mY = canvas.height - GROUND_Y_OFFSET;
+            if (mochkil.x < this.x + this.w && mochkil.x + CHAR_SIZE > this.x && 
+                mY < this.y + this.h && mY + CHAR_SIZE > this.y) {
+                this.collected = true; score += 150; snacksCollected++;
+                updateMochkilCombo(true);
+                mochkil.frameIndex = 1;
+                setTimeout(() => { if(gameState==='PLAYING') mochkil.frameIndex = 0; }, 300);
+                if (snacksCollected % 3 === 0) triggerQuantumShift();
+                if (snacksCollected >= 10 && !exitPortal) exitPortal = new Portal();
+            }
+        }
+        if (this.img.complete && !this.collected) ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
+    }
 }
 
 class Portal {
     constructor() {
-        this.img = new Image();
-        this.img.src = BASE_URL + 'snack-portal.png';
-        this.x = canvas.width + 200;
-        this.y = canvas.height - 280;
+        this.img = new Image(); this.img.src = BASE_URL + 'snack-portal.png';
+        this.x = canvas.width + 200; this.y = canvas.height - 300;
     }
     update() {
         this.x -= gameSpeed;
         if (this.img.complete) {
             ctx.shadowBlur = 20; ctx.shadowColor = "#ff00ff";
-            ctx.drawImage(this.img, this.x, this.y, 120, 150);
-            ctx.shadowBlur = 0;
+            ctx.drawImage(this.img, this.x, this.y, 120, 180); ctx.shadowBlur = 0;
         }
         if (this.x < lori.x + 20) gameState = 'CLEAR';
     }
 }
 
+// --- DRAWING ---
 function drawBackground() {
-    // 1. Sky
     const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
     grad.addColorStop(0, "#2b002b"); grad.addColorStop(1, "#ff007f");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 2. Parallax
     const layers = [
         { src: 'gg-bg.png', s: 0.2, op: 0.2, h: 400 },
         { src: 'building-c.png', s: 0.8, op: 0.4, h: 450 },
@@ -181,12 +218,10 @@ function drawBackground() {
         }
     });
 
-    // 3. Floor
     ctx.globalAlpha = 1;
     let fx = -(frame * 5) % 50;
     if (assets['floor.png'].complete) {
-        ctx.save();
-        ctx.shadowBlur = 15; ctx.shadowColor = "#ff00ff";
+        ctx.save(); ctx.shadowBlur = 15; ctx.shadowColor = "#ff00ff";
         for (let i = 0; i < (canvas.width / 50) + 2; i++) {
             ctx.drawImage(assets['floor.png'], fx + (i * 50), canvas.height - 100, 50, 100);
         }
@@ -219,15 +254,13 @@ function animate() {
             if (slowMoTimer === 0) { gameSpeed = baseSpeed; document.getElementById('status').innerText = "SYSTEMS ONLINE"; }
         }
         if (frame % 100 === 0) gameObjects.push(new GameObject(Math.random() > 0.4 ? 'obstacle' : 'snack'));
-        
         if (isJumping) {
             jumpHeight -= yVelocity; yVelocity += gravity;
             if (jumpHeight <= 0) { jumpHeight = 0; isJumping = false; }
         }
-
         gameObjects.forEach((obj, i) => {
             obj.update();
-            if (obj.x < -100) gameObjects.splice(i, 1);
+            if (obj.x < -200) gameObjects.splice(i, 1);
         });
         if (exitPortal) exitPortal.update();
         document.getElementById('scoreDisplay').innerText = `SCORE: ${score}`;
