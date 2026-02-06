@@ -38,23 +38,22 @@ const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
 
 // --- CONFIG ---
 const CHAR_SIZE = 100;
-const GROUND_Y_POS = 100; // How many pixels from the BOTTOM of the screen
+const GROUND_Y_POS = 120; 
 const gravity = 1.2;
 
 let gameState = 'START'; 
 let score = 0;
-let baseSpeed = 5;
+let baseSpeed = 6;
 let gameSpeed = 0; 
 let frame = 0;
 let isJumping = false;
 let jumpHeight = 0;
 let yVelocity = 0;
-let snacksCollected = 0;
+let jumpCount = 0;
 let recentSnacks = [];
 let gameObjects = [];
-let slowMoTimer = 0;
 
-// --- POOLS ---
+// --- ASSET POOLS ---
 const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 'fish-bones.png', 'smashed-can.png'];
 const snackPool = ['swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png'];
 
@@ -69,7 +68,7 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-// --- LOGIC ---
+// --- UI LOGIC ---
 function updateMenu(file) {
     const menu = document.getElementById('recentMenu');
     recentSnacks.unshift(file);
@@ -77,6 +76,7 @@ function updateMenu(file) {
     menu.innerHTML = recentSnacks.map(f => `<img src="${BASE_URL + f}">`).join('');
 }
 
+// --- PLAYER CLASS ---
 class Player {
     constructor(name, x, sprites) {
         this.name = name; this.x = x;
@@ -84,13 +84,9 @@ class Player {
         this.frameIndex = 0;
     }
     draw() {
-        let animSpeed = slowMoTimer > 0 ? 16 : 8;
-        if (frame % animSpeed === 0) this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
+        if (frame % 8 === 0) this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
         const currentImg = this.sprites[this.frameIndex];
-        
-        // FIXED: Grounded math based on bottom of screen
         const drawY = canvas.height - GROUND_Y_POS - CHAR_SIZE - jumpHeight;
-        
         if (currentImg.complete) {
             ctx.drawImage(currentImg, this.x, drawY, CHAR_SIZE, CHAR_SIZE); 
         }
@@ -101,6 +97,7 @@ const lori = new Player("lori", 50, ['lori-run.png', 'lori-run2.png']);
 const azul = new Player("azul", 140, ['azul-run.png', 'azul-run2.png']);
 const mochkil = new Player("mochkil", 230, ['mochkil-idle.png', 'mochkil-cheese.png']);
 
+// --- OBJECT CLASS ---
 class GameObject {
     constructor(type) {
         this.type = type;
@@ -111,63 +108,84 @@ class GameObject {
         this.x = canvas.width + 100;
         this.collected = false;
 
-        // FIXED SCALING & POSITIONING
-        if (this.file.includes('truck')) { 
-            this.w = 220; this.h = 130; 
-            this.y = canvas.height - GROUND_Y_POS - this.h; // Sits on floor
-        } else if (type === 'obstacle') { 
-            this.w = 80; this.h = 80; 
-            this.y = canvas.height - GROUND_Y_POS - this.h; // Sits on floor
-        } else { 
-            this.w = 60; this.h = 60; 
-            // Snacks float between cat-head height and jump height
-            this.y = canvas.height - GROUND_Y_POS - 150 - (Math.random() * 100); 
+        // Scaling
+        if (this.file.includes('truck')) { this.w = 180; this.h = 100; }
+        else if (this.file.includes('smashed-can')) { this.w = 40; this.h = 40; }
+        else { this.w = 50; this.h = 50; }
+
+        this.y = canvas.height - GROUND_Y_POS - this.h;
+        if (type === 'snack') {
+            this.y -= (Math.random() > 0.5 ? 0 : 160); // Ground or High
         }
     }
+
     update() {
         this.x -= gameSpeed;
         const loriY = canvas.height - GROUND_Y_POS - CHAR_SIZE - jumpHeight;
-        const groundY = canvas.height - GROUND_Y_POS - CHAR_SIZE;
 
+        // Lori Obstacle Check
         if (!this.collected && this.type === 'obstacle') {
-            if (lori.x < this.x + this.w - 20 && lori.x + 60 > this.x && loriY + 80 > this.y && loriY < this.y + this.h) {
+            if (lori.x < this.x + this.w - 15 && lori.x + 60 > this.x && loriY + 80 > this.y && loriY < this.y + this.h) {
                 gameState = 'GAMEOVER';
             }
         }
+
+        // Mochkil Grounded Snack Check
         if (!this.collected && this.type === 'snack') {
-            // Mochkil grabs snacks if they are in reach
-            if (mochkil.x < this.x + this.w && mochkil.x + CHAR_SIZE > this.x && groundY + CHAR_SIZE > this.y && groundY < this.y + this.h) {
+            const isGrounded = this.y > (canvas.height - GROUND_Y_POS - 100);
+            if (isGrounded && mochkil.x < this.x + this.w && mochkil.x + 80 > this.x) {
                 this.collected = true; score += 150;
                 updateMenu(this.file);
                 mochkil.frameIndex = 1;
-                setTimeout(() => { mochkil.frameIndex = 0; }, 300);
+                setTimeout(() => { if(gameState==='PLAYING') mochkil.frameIndex = 0; }, 400);
             }
         }
         if (this.img.complete && !this.collected) ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
     }
 }
 
-// --- CORE LOOPS (Standard Background Logic) ---
+// --- CORE LOOPS ---
 function drawBackground() {
-    ctx.fillStyle = "#2b002b"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    if (assets['gg-bg.png'].complete) ctx.drawImage(assets['gg-bg.png'], 0, 0, canvas.width, canvas.height);
-    
-    // Floor
+    ctx.fillStyle = "#2b002b"; 
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const layers = [
+        { src: 'gg-bg.png', s: 0.2, op: 0.3, h: canvas.height }, 
+        { src: 'building-c.png', s: 0.8, op: 0.5, h: canvas.height * 0.8 },
+        { src: 'building-b.png', s: 1.5, op: 0.7, h: canvas.height * 0.6 },
+        { src: 'building-a.png', s: 2.5, op: 0.9, h: canvas.height * 0.4 }
+    ];
+
+    layers.forEach(l => {
+        if (assets[l.src] && assets[l.src].complete) {
+            let xPos = -(frame * l.s) % canvas.width;
+            ctx.globalAlpha = l.op;
+            ctx.drawImage(assets[l.src], xPos, canvas.height - l.h - GROUND_Y_POS, canvas.width, l.h);
+            ctx.drawImage(assets[l.src], xPos + canvas.width, canvas.height - l.h - GROUND_Y_POS, canvas.width, l.h);
+        }
+    });
+
+    ctx.globalAlpha = 1;
     if (assets['floor.png'].complete) {
         for (let i = 0; i < (canvas.width / 50) + 2; i++) {
-            ctx.drawImage(assets['floor.png'], (-(frame * 5) % 50) + (i * 50), canvas.height - GROUND_Y_POS, 50, 100);
+            ctx.drawImage(assets['floor.png'], (-(frame * gameSpeed) % 50) + (i * 50), canvas.height - GROUND_Y_POS, 50, 100);
         }
     }
 }
 
 function handleJump() {
     if (gameState !== 'PLAYING') resetGame();
-    else if (!isJumping) { isJumping = true; yVelocity = -22; }
+    else if (jumpCount < 2) {
+        isJumping = true; yVelocity = -20; jumpCount++;
+        document.getElementById('status').innerText = jumpCount === 2 ? "DOUBLE JUMP ACTIVE" : "SYSTEMS ONLINE";
+    }
 }
 
 function resetGame() {
     score = 0; gameObjects = []; gameSpeed = baseSpeed; frame = 0; gameState = 'PLAYING';
-    recentSnacks = []; document.getElementById('recentMenu').innerHTML = '';
+    recentSnacks = []; jumpCount = 0; jumpHeight = 0;
+    document.getElementById('recentMenu').innerHTML = '';
+    document.getElementById('status').innerText = "SYSTEMS ONLINE";
 }
 
 window.addEventListener('touchstart', (e) => { e.preventDefault(); handleJump(); });
@@ -176,20 +194,28 @@ window.addEventListener('mousedown', handleJump);
 function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackground();
+
     if (gameState === 'PLAYING') {
         frame++;
-        if (frame % 100 === 0) gameObjects.push(new GameObject(Math.random() > 0.3 ? 'obstacle' : 'snack'));
-        if (isJumping) { jumpHeight -= yVelocity; yVelocity += gravity; if (jumpHeight <= 0) { jumpHeight = 0; isJumping = false; } }
-        gameObjects.forEach((obj, i) => { obj.update(); if (obj.x < -250) gameObjects.splice(i, 1); });
+        if (frame % 80 === 0) gameObjects.push(new GameObject(Math.random() > 0.4 ? 'obstacle' : 'snack'));
+        if (isJumping) {
+            jumpHeight -= yVelocity; yVelocity += gravity;
+            if (jumpHeight <= 0) { jumpHeight = 0; isJumping = false; jumpCount = 0; }
+        }
+        gameObjects.forEach((obj, i) => {
+            obj.update();
+            if (obj.x < -300) gameObjects.splice(i, 1);
+        });
         document.getElementById('scoreDisplay').innerText = `SCORE: ${score}`;
     }
-    lori, azul, mochkil.draw(); // Simplified draw call for brevity in example
+
     lori.draw(); azul.draw(); mochkil.draw();
 
     if (gameState !== 'PLAYING') {
         ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0,0,canvas.width,canvas.height);
-        ctx.fillStyle = "#0ff"; ctx.textAlign = "center"; ctx.font = "30px Courier";
-        ctx.fillText(gameState === 'START' ? "TAP TO START" : "CONNECTION LOST", canvas.width/2, canvas.height/2);
+        ctx.fillStyle = "#0ff"; ctx.textAlign = "center"; ctx.font = "24px Courier";
+        ctx.fillText(gameState === 'START' ? "MAXIMUM REALITY" : "CONNECTION LOST", canvas.width/2, canvas.height/2 - 20);
+        ctx.fillText("TAP TO CONNECT", canvas.width/2, canvas.height/2 + 20);
     }
     requestAnimationFrame(animate);
 }
