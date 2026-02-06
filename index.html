@@ -6,25 +6,11 @@
     <title>Maximum Reality: Cyber Alley</title>
     <style>
         body { 
-            margin: 0; 
-            background: #000; 
-            overflow: hidden; 
-            font-family: 'Courier New', Courier, monospace;
-            position: fixed; 
-            width: 100%;
-            height: 100%;
-            /* Fix for iPhone Blue Selection */
-            -webkit-user-select: none;
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
+            margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', Courier, monospace;
+            position: fixed; width: 100%; height: 100%;
+            -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
         }
-        #gameCanvas { 
-            display: block; 
-            width: 100vw; 
-            height: 100vh; 
-            image-rendering: pixelated; 
-            touch-action: none;
-        }
+        #gameCanvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; touch-action: none; }
         .ui-layer {
             position: absolute; top: 0; width: 100%; text-align: center;
             color: #0ff; text-shadow: 0 0 10px #0ff; pointer-events: none;
@@ -41,6 +27,9 @@
     </style>
 </head>
 <body>
+    <audio id="bgMusic" loop>
+        <source src="https://maximumreality.github.io/cyber-alley/futuristic-cyberpunk-industrial-music.mp3" type="audio/mpeg">
+    </audio>
     <div class="crt-overlay"></div>
     <div class="ui-layer">
         <div id="scoreDisplay">SCORE: 0</div>
@@ -58,6 +47,7 @@ const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
 const CHAR_SIZE = 100;
 const GROUND_Y_POS = 120; 
 const gravity = 1.2;
+const music = document.getElementById('bgMusic');
 
 let gameState = 'START'; 
 let score = 0;
@@ -68,21 +58,18 @@ let isJumping = false;
 let jumpHeight = 0;
 let yVelocity = 0;
 let jumpCount = 0;
+let hasQuantumShield = true;
 let recentSnacks = [];
 let gameObjects = [];
 
-// --- ASSET POOLS ---
+// --- ASSETS ---
 const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 'fish-bones.png', 'smashed-can.png'];
 const snackPool = ['swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png'];
-
 const assets = {};
 const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'floor.png'];
 toLoad.forEach(src => { assets[src] = new Image(); assets[src].src = BASE_URL + src; });
 
-function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-}
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 window.addEventListener('resize', resize);
 resize();
 
@@ -100,10 +87,17 @@ class Player {
         this.frameIndex = 0;
     }
     draw() {
-        if (frame % 8 === 0) this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
-        const currentImg = this.sprites[this.frameIndex];
-        const drawY = canvas.height - GROUND_Y_POS - CHAR_SIZE - jumpHeight;
-        if (currentImg.complete) { ctx.drawImage(currentImg, this.x, drawY, CHAR_SIZE, CHAR_SIZE); }
+        // Only animate Lori/Azul, or Mochkil if he's not in idle frame 0
+        if (this.name !== 'mochkil' || this.frameIndex !== 0) {
+            if (frame % 8 === 0) this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
+        }
+        const drawY = canvas.height - GROUND_Y_POS - CHAR_SIZE - (this.name !== 'mochkil' ? jumpHeight : 0);
+        if (this.sprites[this.frameIndex].complete) {
+            ctx.save();
+            if (this.name === 'azul' && hasQuantumShield) { ctx.shadowBlur = 20; ctx.shadowColor = "#0ff"; }
+            ctx.drawImage(this.sprites[this.frameIndex], this.x, drawY, CHAR_SIZE, CHAR_SIZE); 
+            ctx.restore();
+        }
     }
 }
 
@@ -116,10 +110,8 @@ class GameObject {
         this.type = type;
         const pool = type === 'obstacle' ? obstaclePool : snackPool;
         this.file = pool[Math.floor(Math.random() * pool.length)];
-        this.img = new Image();
-        this.img.src = BASE_URL + this.file;
-        this.x = canvas.width + 100;
-        this.collected = false;
+        this.img = new Image(); this.img.src = BASE_URL + this.file;
+        this.x = canvas.width + 100; this.collected = false;
 
         if (this.file.includes('truck')) { this.w = 180; this.h = 100; }
         else if (this.file.includes('smashed-can')) { this.w = 40; this.h = 40; }
@@ -128,27 +120,29 @@ class GameObject {
         this.y = canvas.height - GROUND_Y_POS - this.h;
         if (type === 'snack') { this.y -= (Math.random() > 0.5 ? 0 : 160); }
     }
-
     update() {
         this.x -= gameSpeed;
-        const loriY = canvas.height - GROUND_Y_POS - CHAR_SIZE - jumpHeight;
+        const loriJumpY = canvas.height - GROUND_Y_POS - CHAR_SIZE - jumpHeight;
+        const groundY = canvas.height - GROUND_Y_POS - CHAR_SIZE;
 
         if (!this.collected && this.type === 'obstacle') {
-            const loriHitX = lori.x + 35; // Narrower hit box
-            const loriHitW = 30;
-            if (loriHitX < this.x + this.w - 15 && loriHitX + loriHitW > this.x + 15 && loriY + 85 > this.y + 10 && loriY + 15 < this.y + this.h) {
-                gameState = 'GAMEOVER';
+            const loriHitX = lori.x + 35;
+            if (loriHitX < this.x + this.w - 15 && loriHitX + 30 > this.x + 15 && loriJumpY + 85 > this.y + 10 && loriJumpY + 15 < this.y + this.h) {
+                if (hasQuantumShield) {
+                    hasQuantumShield = false; this.collected = true;
+                    document.getElementById('status').innerText = "AZUL HACKED THE SYSTEM: SHIELD DOWN";
+                } else { gameState = 'GAMEOVER'; music.pause(); }
             }
         }
-
         if (!this.collected && this.type === 'snack') {
-            const isGrounded = this.y > (canvas.height - GROUND_Y_POS - 110);
-            if (isGrounded && mochkil.x < this.x + this.w && mochkil.x + 80 > this.x) {
-                this.collected = true; score += 150;
-                updateMenu(this.file);
-                mochkil.frameIndex = 1;
-                setTimeout(() => { if(gameState==='PLAYING') mochkil.frameIndex = 0; }, 400);
-            }
+            const targets = [{x: lori.x, y: loriJumpY}, {x: azul.x, y: loriJumpY}, {x: mochkil.x, y: groundY}];
+            targets.forEach(t => {
+                if (t.x < this.x + this.w && t.x + 80 > this.x && t.y < this.y + this.h && t.y + 80 > this.y) {
+                    this.collected = true; score += 150; updateMenu(this.file);
+                    mochkil.frameIndex = 1; 
+                    setTimeout(() => { if(gameState==='PLAYING') mochkil.frameIndex = 0; }, 600);
+                }
+            });
         }
         if (this.img.complete && !this.collected) ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
     }
@@ -156,23 +150,19 @@ class GameObject {
 
 function handleJump() {
     if (gameState !== 'PLAYING') resetGame();
-    else if (jumpCount < 2) {
-        isJumping = true; yVelocity = -20; jumpCount++;
-        document.getElementById('status').innerText = jumpCount === 2 ? "DOUBLE JUMP ACTIVE" : "SYSTEMS ONLINE";
-    }
+    else if (jumpCount < 2) { isJumping = true; yVelocity = -20; jumpCount++; }
 }
 
 function resetGame() {
     score = 0; gameObjects = []; gameSpeed = baseSpeed; frame = 0; gameState = 'PLAYING';
-    recentSnacks = []; jumpCount = 0; jumpHeight = 0;
+    recentSnacks = []; jumpCount = 0; jumpHeight = 0; hasQuantumShield = true;
+    music.play().catch(() => {});
     document.getElementById('recentMenu').innerHTML = '';
+    document.getElementById('status').innerText = "SYSTEMS ONLINE";
 }
 
-// Global Touch Listeners
-window.addEventListener('touchstart', (e) => { 
-    if (e.target.id === 'gameCanvas') { e.preventDefault(); handleJump(); }
-}, { passive: false });
-window.addEventListener('mousedown', (e) => { handleJump(); });
+window.addEventListener('touchstart', (e) => { if (e.target.id === 'gameCanvas') { e.preventDefault(); handleJump(); } }, { passive: false });
+window.addEventListener('mousedown', handleJump);
 
 function drawBackground() {
     ctx.fillStyle = "#2b002b"; ctx.fillRect(0, 0, canvas.width, canvas.height);
