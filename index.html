@@ -5,8 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Maximum Reality: Cyber Alley</title>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
-        #gameCanvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
+        body { 
+            margin: 0; 
+            background: #000; 
+            overflow: hidden; 
+            font-family: 'Courier New', Courier, monospace;
+            position: fixed; 
+            width: 100%;
+            height: 100%;
+            /* Fix for iPhone Blue Selection */
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #gameCanvas { 
+            display: block; 
+            width: 100vw; 
+            height: 100vh; 
+            image-rendering: pixelated; 
+            touch-action: none;
+        }
         .ui-layer {
             position: absolute; top: 0; width: 100%; text-align: center;
             color: #0ff; text-shadow: 0 0 10px #0ff; pointer-events: none;
@@ -68,7 +86,6 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-// --- UI LOGIC ---
 function updateMenu(file) {
     const menu = document.getElementById('recentMenu');
     recentSnacks.unshift(file);
@@ -76,7 +93,6 @@ function updateMenu(file) {
     menu.innerHTML = recentSnacks.map(f => `<img src="${BASE_URL + f}">`).join('');
 }
 
-// --- PLAYER CLASS ---
 class Player {
     constructor(name, x, sprites) {
         this.name = name; this.x = x;
@@ -87,9 +103,7 @@ class Player {
         if (frame % 8 === 0) this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
         const currentImg = this.sprites[this.frameIndex];
         const drawY = canvas.height - GROUND_Y_POS - CHAR_SIZE - jumpHeight;
-        if (currentImg.complete) {
-            ctx.drawImage(currentImg, this.x, drawY, CHAR_SIZE, CHAR_SIZE); 
-        }
+        if (currentImg.complete) { ctx.drawImage(currentImg, this.x, drawY, CHAR_SIZE, CHAR_SIZE); }
     }
 }
 
@@ -97,7 +111,6 @@ const lori = new Player("lori", 50, ['lori-run.png', 'lori-run2.png']);
 const azul = new Player("azul", 140, ['azul-run.png', 'azul-run2.png']);
 const mochkil = new Player("mochkil", 230, ['mochkil-idle.png', 'mochkil-cheese.png']);
 
-// --- OBJECT CLASS ---
 class GameObject {
     constructor(type) {
         this.type = type;
@@ -108,31 +121,28 @@ class GameObject {
         this.x = canvas.width + 100;
         this.collected = false;
 
-        // Scaling
         if (this.file.includes('truck')) { this.w = 180; this.h = 100; }
         else if (this.file.includes('smashed-can')) { this.w = 40; this.h = 40; }
         else { this.w = 50; this.h = 50; }
 
         this.y = canvas.height - GROUND_Y_POS - this.h;
-        if (type === 'snack') {
-            this.y -= (Math.random() > 0.5 ? 0 : 160); // Ground or High
-        }
+        if (type === 'snack') { this.y -= (Math.random() > 0.5 ? 0 : 160); }
     }
 
     update() {
         this.x -= gameSpeed;
         const loriY = canvas.height - GROUND_Y_POS - CHAR_SIZE - jumpHeight;
 
-        // Lori Obstacle Check
         if (!this.collected && this.type === 'obstacle') {
-            if (lori.x < this.x + this.w - 15 && lori.x + 60 > this.x && loriY + 80 > this.y && loriY < this.y + this.h) {
+            const loriHitX = lori.x + 35; // Narrower hit box
+            const loriHitW = 30;
+            if (loriHitX < this.x + this.w - 15 && loriHitX + loriHitW > this.x + 15 && loriY + 85 > this.y + 10 && loriY + 15 < this.y + this.h) {
                 gameState = 'GAMEOVER';
             }
         }
 
-        // Mochkil Grounded Snack Check
         if (!this.collected && this.type === 'snack') {
-            const isGrounded = this.y > (canvas.height - GROUND_Y_POS - 100);
+            const isGrounded = this.y > (canvas.height - GROUND_Y_POS - 110);
             if (isGrounded && mochkil.x < this.x + this.w && mochkil.x + 80 > this.x) {
                 this.collected = true; score += 150;
                 updateMenu(this.file);
@@ -141,35 +151,6 @@ class GameObject {
             }
         }
         if (this.img.complete && !this.collected) ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
-    }
-}
-
-// --- CORE LOOPS ---
-function drawBackground() {
-    ctx.fillStyle = "#2b002b"; 
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const layers = [
-        { src: 'gg-bg.png', s: 0.2, op: 0.3, h: canvas.height }, 
-        { src: 'building-c.png', s: 0.8, op: 0.5, h: canvas.height * 0.8 },
-        { src: 'building-b.png', s: 1.5, op: 0.7, h: canvas.height * 0.6 },
-        { src: 'building-a.png', s: 2.5, op: 0.9, h: canvas.height * 0.4 }
-    ];
-
-    layers.forEach(l => {
-        if (assets[l.src] && assets[l.src].complete) {
-            let xPos = -(frame * l.s) % canvas.width;
-            ctx.globalAlpha = l.op;
-            ctx.drawImage(assets[l.src], xPos, canvas.height - l.h - GROUND_Y_POS, canvas.width, l.h);
-            ctx.drawImage(assets[l.src], xPos + canvas.width, canvas.height - l.h - GROUND_Y_POS, canvas.width, l.h);
-        }
-    });
-
-    ctx.globalAlpha = 1;
-    if (assets['floor.png'].complete) {
-        for (let i = 0; i < (canvas.width / 50) + 2; i++) {
-            ctx.drawImage(assets['floor.png'], (-(frame * gameSpeed) % 50) + (i * 50), canvas.height - GROUND_Y_POS, 50, 100);
-        }
     }
 }
 
@@ -185,16 +166,36 @@ function resetGame() {
     score = 0; gameObjects = []; gameSpeed = baseSpeed; frame = 0; gameState = 'PLAYING';
     recentSnacks = []; jumpCount = 0; jumpHeight = 0;
     document.getElementById('recentMenu').innerHTML = '';
-    document.getElementById('status').innerText = "SYSTEMS ONLINE";
 }
 
-window.addEventListener('touchstart', (e) => { e.preventDefault(); handleJump(); });
-window.addEventListener('mousedown', handleJump);
+// Global Touch Listeners
+window.addEventListener('touchstart', (e) => { 
+    if (e.target.id === 'gameCanvas') { e.preventDefault(); handleJump(); }
+}, { passive: false });
+window.addEventListener('mousedown', (e) => { handleJump(); });
+
+function drawBackground() {
+    ctx.fillStyle = "#2b002b"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const layers = [{ src: 'gg-bg.png', s: 0.2, op: 0.3, h: canvas.height }, { src: 'building-c.png', s: 0.8, op: 0.5, h: canvas.height * 0.8 }, { src: 'building-b.png', s: 1.5, op: 0.7, h: canvas.height * 0.6 }, { src: 'building-a.png', s: 2.5, op: 0.9, h: canvas.height * 0.4 }];
+    layers.forEach(l => {
+        if (assets[l.src] && assets[l.src].complete) {
+            let xPos = -(frame * l.s) % canvas.width;
+            ctx.globalAlpha = l.op;
+            ctx.drawImage(assets[l.src], xPos, canvas.height - l.h - GROUND_Y_POS, canvas.width, l.h);
+            ctx.drawImage(assets[l.src], xPos + canvas.width, canvas.height - l.h - GROUND_Y_POS, canvas.width, l.h);
+        }
+    });
+    ctx.globalAlpha = 1;
+    if (assets['floor.png'] && assets['floor.png'].complete) {
+        for (let i = 0; i < (canvas.width / 50) + 2; i++) {
+            ctx.drawImage(assets['floor.png'], (-(frame * gameSpeed) % 50) + (i * 50), canvas.height - GROUND_Y_POS, 50, 100);
+        }
+    }
+}
 
 function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackground();
-
     if (gameState === 'PLAYING') {
         frame++;
         if (frame % 80 === 0) gameObjects.push(new GameObject(Math.random() > 0.4 ? 'obstacle' : 'snack'));
@@ -202,15 +203,10 @@ function animate() {
             jumpHeight -= yVelocity; yVelocity += gravity;
             if (jumpHeight <= 0) { jumpHeight = 0; isJumping = false; jumpCount = 0; }
         }
-        gameObjects.forEach((obj, i) => {
-            obj.update();
-            if (obj.x < -300) gameObjects.splice(i, 1);
-        });
+        gameObjects.forEach((obj, i) => { obj.update(); if (obj.x < -300) gameObjects.splice(i, 1); });
         document.getElementById('scoreDisplay').innerText = `SCORE: ${score}`;
     }
-
     lori.draw(); azul.draw(); mochkil.draw();
-
     if (gameState !== 'PLAYING') {
         ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0,0,canvas.width,canvas.height);
         ctx.fillStyle = "#0ff"; ctx.textAlign = "center"; ctx.font = "24px Courier";
