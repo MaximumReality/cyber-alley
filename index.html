@@ -40,67 +40,104 @@
 
 <script>
     const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d');
 
-    // Handle Resize for iPhone Pro Max
-    function resize() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-    }
-    window.addEventListener('resize', resize);
-    resize();
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
 
-    // Game Variables
-    let gameSpeed = 5;
-    let frame = 0;
+// --- Configuration ---
+const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
+let gameSpeed = 5;
+let frame = 0;
+let isJumping = false;
+let jumpHeight = 0;
+const gravity = 1.5;
+let yVelocity = 0;
 
-    // Character Mockup
-    class Entity {
-        constructor(name, xOffset, color) {
-            this.name = name;
-            this.x = xOffset;
-            this.y = canvas.height - 150;
-            this.color = color;
-            this.width = 40;
-            this.height = 60;
-        }
-
-        draw() {
-            ctx.fillStyle = this.color;
-            ctx.fillRect(this.x, this.y, this.width, this.height);
-            ctx.fillStyle = "white";
-            ctx.fillText(this.name, this.x, this.y - 10);
-        }
+class Player {
+    constructor(name, x, yOffset, sprites) {
+        this.name = name;
+        this.x = x;
+        this.baseYOffset = yOffset; // Height from bottom
+        this.sprites = sprites.map(file => {
+            const img = new Image();
+            img.src = BASE_URL + file;
+            return img;
+        });
+        this.frameIndex = 0;
     }
 
-    const team = [
-        new Entity("YOU", 50, "#00ffff"),
-        new Entity("AZUL", 110, "#silver"),
-        new Entity("MOCHKIL", 170, "#f5deb3")
-    ];
-
-    function animate() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // 1. Draw "Cyber Alley" Floor
-        ctx.strokeStyle = "#ff00ff";
-        ctx.lineWidth = 2;
-        for(let i = 0; i < 10; i++) {
-            let lineY = (canvas.height - 100) + (i * 20) + (frame % 20);
-            ctx.beginPath();
-            ctx.moveTo(0, lineY);
-            ctx.lineTo(canvas.width, lineY);
-            ctx.stroke();
+    draw() {
+        // Simple run animation toggle
+        if (frame % 8 === 0) {
+            this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
         }
+        
+        const currentImg = this.sprites[this.frameIndex];
+        // Dynamic Y position based on global jumpHeight
+        const drawY = (canvas.height - this.baseYOffset) - jumpHeight;
 
-        // 2. Draw Characters
-        team.forEach(member => member.draw());
+        if (currentImg.complete) {
+            ctx.drawImage(currentImg, this.x, drawY, 80, 80); 
+        }
+    }
+}
 
-        frame += gameSpeed;
-        requestAnimationFrame(animate);
+// --- Initialize the Trio ---
+const lori = new Player("lori", 50, 180, ['lori-run.png', 'lori-run2.png']);
+const azul = new Player("azul", 140, 170, ['azul-run.png', 'azul-run2.png']);
+const mochkil = new Player("mochkil", 230, 140, ['mochkil-idle.png', 'mochkil-cheese.png']);
+
+// --- Controls ---
+const handleJump = () => {
+    if (!isJumping) {
+        isJumping = true;
+        yVelocity = -20; // Initial pop up
+    }
+};
+
+window.addEventListener('touchstart', handleJump);
+window.addEventListener('mousedown', handleJump);
+
+function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 1. Jump Physics
+    if (isJumping) {
+        jumpHeight -= yVelocity;
+        yVelocity += gravity;
+        if (jumpHeight <= 0) {
+            jumpHeight = 0;
+            isJumping = false;
+        }
     }
 
-    animate();
+    // 2. Cyber Alley Floor (Scrolling)
+    ctx.strokeStyle = "#ff00ff";
+    ctx.lineWidth = 2;
+    for(let i = 0; i < 8; i++) {
+        let lineY = (canvas.height - 100) + (i * 25) + (frame % 25);
+        ctx.beginPath();
+        ctx.moveTo(0, lineY);
+        ctx.lineTo(canvas.width, lineY);
+        ctx.stroke();
+    }
+
+    // 3. Draw the Team
+    lori.draw();
+    azul.draw();
+    mochkil.draw();
+
+    frame++;
+    requestAnimationFrame(animate);
+}
+
+animate();
+
 </script>
 </body>
 </html>
