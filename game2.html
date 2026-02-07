@@ -197,7 +197,63 @@ function updateMenu(file) {
     if (menu.children.length > 5) menu.removeChild(menu.lastChild);
 }
 
-function jump() { if (gameState === 'PLAYING' && jumpCount < 2) { yVelocity = -18; jumpCount++; } }
+// --- NEW RESET LOGIC ---
+function resetGame() {
+    // Clear the field
+    gameObjects = [];
+    score = 0;
+    frame = 0;
+    jumpHeight = 0;
+    jumpCount = 0;
+    
+    // Restore the team's health
+    hasQuantumShield = true;
+    snackStreak = 0;
+    
+    // Restart systems
+    gameState = 'PLAYING';
+    document.getElementById('status').innerText = "SYSTEM REBOOTED";
+    document.getElementById('recentMenu').innerHTML = '';
+    
+    // Resume music if it was paused
+    music.currentTime = 0;
+    music.play();
+}
+
+// --- UPDATED INPUT HANDLING ---
+function handleInput(e) {
+    // If we are at the Start or Game Over screen, tap to (re)start
+    if (gameState === 'START' || gameState === 'GAMEOVER') {
+        resetGame();
+    } 
+    // If we are playing, tap to jump
+    else if (gameState === 'PLAYING') {
+        jump();
+    }
+}
+
+// Attach the new input handler to both Touch and Mouse
+window.addEventListener('touchstart', (e) => {
+    if (e.target.tagName !== 'BUTTON') {
+        e.preventDefault();
+        handleInput(e);
+    }
+}, { passive: false });
+
+window.addEventListener('mousedown', (e) => {
+    if (e.target.tagName !== 'BUTTON') {
+        handleInput(e);
+    }
+});
+
+// Update the Jump logic to be tighter
+function jump() {
+    if (jumpCount < 2) {
+        yVelocity = -18;
+        jumpCount++;
+    }
+}
+
 function toggleMute() { music.muted = !music.muted; document.getElementById('muteBtn').innerText = music.muted ? "🔇" : "🔊"; }
 
 window.addEventListener('touchstart', (e) => { if(e.target.tagName !== 'BUTTON') { e.preventDefault(); jump(); } }, {passive: false});
