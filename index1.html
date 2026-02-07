@@ -196,11 +196,24 @@ function restoreShield() {
 function handlePortalEntry() {
     if (isTransitioning) return;
     isTransitioning = true;
+    
     shake = 50;
-    currentBiome = 'day';
+    currentBiome = 'day'; // Now we are in Stage 2
     portalFrame = frame;
+    
+    // Clear everything so Stage 2 starts fresh
+    gameObjects = []; 
+    
     score += 500;
     document.getElementById('status').innerText = "SECTOR 2: THE BRIGHT SIDE";
+    
+    baseSpeed = 9; 
+    gameSpeed = baseSpeed;
+
+    // This cooldown ensures the portal logic doesn't re-trigger immediately
+    setTimeout(() => { isTransitioning = false; }, 2000);
+}
+
     
     // Controlled speed boost
     baseSpeed = 9; 
@@ -264,14 +277,30 @@ function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackground();
 
-    if (gameState === 'PLAYING') {
-        frame++;
-        if (score >= 2000 && !isTransitioning && !gameObjects.some(obj => obj.file.includes('snack-portal'))) {
-            let portal = new GameObject('snack');
-            portal.file = 'snack-portal.png';
-            portal.img.src = BASE_URL + portal.file;
-            gameObjects.push(portal);
-        }
+    // --- Inside animate() ---
+
+if (gameState === 'PLAYING') {
+    frame++;
+
+    // 1. Check if we need to spawn THE portal
+    const portalExists = gameObjects.some(obj => obj.file.includes('snack-portal'));
+    
+    if (score >= 2000 && currentBiome === 'night' && !portalExists && !isTransitioning) {
+        let portal = new GameObject('snack');
+        portal.file = 'snack-portal.png';
+        portal.img.src = BASE_URL + portal.file;
+        // Ensure it's the only thing that spawns
+        gameObjects.push(portal);
+    } 
+
+    // 2. Only spawn regular items if the portal ISN'T on screen
+    if (frame % 80 === 0 && !portalExists) {
+        gameObjects.push(new GameObject(Math.random() > 0.4 ? 'obstacle' : 'snack'));
+    }
+    
+    // ... rest of movement logic
+}
+
         if (frame % 80 === 0) gameObjects.push(new GameObject(Math.random() > 0.4 ? 'obstacle' : 'snack'));
         if (isJumping) {
             jumpHeight -= yVelocity; yVelocity += gravity;
