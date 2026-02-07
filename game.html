@@ -122,10 +122,33 @@ let shake = 0;
 let particles = [];
 
 const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 'fish-bones.png', 'smashed-can.png', 'smashed-juice-box.png', 'smashed-soda-can.png', 'detergent.png', 'receipt.png', 'scrub_brush.png', 'toilet_paper.png', 'hand_sanitiser.png', 'kitchen_soap.png', 'frying-pan.png', 'basket_metal.png'];
-const snackPool = ['credit_card_1.png', 'swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png', 'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 'fried-egg.png', 'green_apple.png', 'hotdog.png', 'marshmallows.png', 'milk_chocolate.png', 'pancake_stack.png', 'popcorn.png', 'red_apple.png', 'sandwich.png', 'strawberry-candy.png', 'watermelon-slice.png', 'tuna_can.png', 'ketchup.png', 'soft_drink_blue.png', 'milk_gallon.png', 'orange_juice.png'];
+const obstaclePool = [
+    'dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 
+    'overflowing-trashcan.png', 'fish-bones.png', 'smashed-can.png', 
+    'smashed-juice-box.png', 'smashed-soda-can.png', 'detergent.png', 
+    'receipt.png', 'scrub_brush.png', 'toilet_paper.png', 
+    'hand_sanitiser.png', 'kitchen_soap.png', 'frying-pan.png',
+    'basket_metal.png'
+];
 
-const assets = {};
-const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'building-d.png', 'building-e.png', 'building-f.png', 'floor.png', 'snack-portal.png'];
+const snackPool = [
+    'credit_card_1.png', 'swiss-cheese.png', 'pizza-slice.png', 
+    'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 
+    'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png', 
+    'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 
+    'fried-egg.png', 'green_apple.png', 'hotdog.png', 'marshmallows.png', 
+    'milk_chocolate.png', 'pancake_stack.png', 'popcorn.png', 
+    'red_apple.png', 'sandwich.png', 'strawberry-candy.png', 
+    'watermelon-slice.png', 'tuna_can.png', 'ketchup.png',
+    'soft_drink_blue.png', 'milk_gallon.png', 'orange_juice.png'
+];
+
+const toLoad = [
+    'gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 
+    'building-d.png', 'building-e.png', 'building-f.png', 
+    'floor.png', 'snack-portal.png'
+];
+
 
 function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 window.addEventListener('resize', resize);
@@ -166,8 +189,15 @@ class GameObject {
         this.type = type;
         const pool = type === 'obstacle' ? obstaclePool : snackPool;
         this.file = pool[Math.floor(Math.random() * pool.length)];
-        this.img = new Image(); this.img.src = BASE_URL + this.file;
-        this.x = canvas.width + 100; this.collected = false;
+        this.img = new Image();
+        this.img.src = BASE_URL + this.file;
+        this.x = canvas.width + 100;
+        this.collected = false;
+        this.isValid = true;
+
+        // If image fails to load, mark as invalid so it doesn't hit the player
+        this.img.onerror = () => { this.isValid = false; };
+
         if (this.file.includes('snack-portal')) { this.w = 150; this.h = 200; }
         else if (this.file.includes('truck')) { this.w = 180; this.h = 100; }
         else if (this.file.includes('dumpster')) { this.w = 120; this.h = 90; }
@@ -176,6 +206,7 @@ class GameObject {
         if (type === 'snack' && !this.file.includes('portal')) { this.y -= (Math.random() > 0.5 ? 0 : 160); }
     }
     update() {
+        if (!this.isValid) return; // Skip if image is missing
         this.x -= gameSpeed;
         const loriJumpY = canvas.height - GROUND_Y_POS - CHAR_SIZE - jumpHeight;
         
@@ -214,6 +245,7 @@ class GameObject {
         if (this.img.complete && !this.collected) ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
     }
 }
+
 
 function handlePortalEntry() {
     if (isTransitioning) return;
