@@ -74,7 +74,14 @@
     z-index: 5;
 }
 
-        #recentMenu { margin-top: 10px; display: flex; justify-content: center; gap: 10px; height: 40px; }
+        #recentMenu { 
+    margin-top: 70px; /* 👈 This pushes the snack icons down to clear the buttons */
+    display: flex; 
+    justify-content: center; 
+    gap: 10px; 
+    height: 40px; 
+}
+
         #recentMenu img { width: 40px; height: 40px; background: rgba(0,255,255,0.1); border-radius: 5px; border: 1px solid #0ff; }
         .crt-overlay {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
