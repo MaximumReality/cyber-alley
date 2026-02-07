@@ -54,6 +54,10 @@
 let isPaused = false;
 let isMuted = false;
 
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
+
 function toggleMute() {
     isMuted = !isMuted;
     music.muted = isMuted;
@@ -67,15 +71,7 @@ function togglePause() {
     if (isPaused) music.pause(); else music.play().catch(() => {});
 }
 
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
-
-const biomes = {
-    night: { bg: 'gg-bg.png', buildings: ['building-a.png', 'building-b.png', 'building-c.png'], overlay: "rgba(43, 0, 43, 1)" },
-    day: { bg: 'gg-bg.png', buildings: ['building-d.png', 'building-e.png', 'building-f.png'], overlay: "rgba(135, 206, 235, 1)" }
-};
-
+// --- CONFIG & STATE ---
 const CHAR_SIZE = 100;
 const GROUND_Y_POS = 120; 
 const gravity = 1.2;
@@ -99,6 +95,11 @@ let recentSnacks = [];
 let gameObjects = [];
 let shake = 0;
 let particles = [];
+
+const biomes = {
+    night: { bg: 'gg-bg.png', buildings: ['building-a.png', 'building-b.png', 'building-c.png'], overlay: "rgba(43, 0, 43, 1)" },
+    day: { bg: 'gg-bg.png', buildings: ['building-d.png', 'building-e.png', 'building-f.png'], overlay: "rgba(135, 206, 235, 1)" }
+};
 
 const stars = Array.from({ length: 80 }, () => ({
     x: Math.random() * 2000,
@@ -126,49 +127,33 @@ function updateMenu(file) {
 }
 
 class Player {
-    constructor(name, x, sprites, customW = 100, customH = 100) {
+    constructor(name, x, sprites, w = 100, h = 100) {
         this.name = name; 
-        this.x = x;
-        this.w = customW; // Now uses the numbers you added!
-        this.h = customH;
-        this.sprites = sprites.map(file => { 
-            const img = new Image(); 
-            img.src = BASE_URL + file; 
-            img.onload = assetLoaded; // Keep the loading counter in sync
-            return img; 
-        });
+        this.x = x; 
+        this.w = w; 
+        this.h = h;
+        this.sprites = sprites.map(file => { const img = new Image(); img.src = BASE_URL + file; return img; });
         this.frameIndex = 0;
     }
     draw() {
         if (this.name !== 'mochkil' || this.frameIndex !== 0) {
             if (frame % 8 === 0) this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
         }
-        // Use this.h to make sure they all stand on the ground correctly
         const drawY = canvas.height - GROUND_Y_POS - this.h - (this.name !== 'mochkil' ? jumpHeight : 0);
-        
         if (this.sprites[this.frameIndex].complete) {
             ctx.save();
-            if (this.name === 'azul' && hasQuantumShield) { 
-                ctx.shadowBlur = 20; 
-                ctx.shadowColor = "#0ff"; 
-            }
-            // Draw using the specific width and height you defined
+            if (this.name === 'azul' && hasQuantumShield) { ctx.shadowBlur = 20; ctx.shadowColor = "#0ff"; }
             ctx.drawImage(this.sprites[this.frameIndex], this.x, drawY, this.w, this.h); 
             ctx.restore();
         }
     }
 }
 
-
-// --- NEW SPRITES INITIALIZED HERE ---
-/ Define Players
+// --- INITIALIZE PLAYERS ---
 const lori = new Player("lori", 50, ['Lori-run.png', 'Lori-run2.png', 'Lori-run3.png'], 90, 120);
 const azul = new Player("azul", 160, ['Azul-run.png', 'Azul-run2.png', 'Azul-run3.png'], 65, 65);
 const mochkil = new Player("mochkil", 250, ['Mochkil.png', 'Mochkil2.png'], 75, 75);
 
-// Initialize Loading
-totalAssets = toLoad.length + lori.sprites.length + azul.sprites.length + mochkil.sprites.length;
-toLoad.forEach(src => { assets[src] = new Image(); assets[src].onload = assetLoaded; assets[src].src = BASE_URL + src; });
 class GameObject {
     constructor(type) {
         this.type = type;
@@ -185,16 +170,16 @@ class GameObject {
     }
     update() {
         this.x -= gameSpeed;
-        const loriJumpY = canvas.height - GROUND_Y_POS - CHAR_SIZE - jumpHeight;
+        const loriJumpY = canvas.height - GROUND_Y_POS - lori.h - jumpHeight;
         if (!this.collected && this.type === 'obstacle') {
-            const loriHitX = lori.x + 35;
-            if (loriHitX < this.x + this.w - 15 && loriHitX + 30 > this.x + 15 && loriJumpY + 85 > this.y + 10 && loriJumpY + 15 < this.y + this.h) {
+            const loriHitX = lori.x + 30;
+            if (loriHitX < this.x + this.w - 15 && loriHitX + 30 > this.x + 15 && loriJumpY + lori.h > this.y + 10 && loriJumpY < this.y + this.h) {
                 if (hasQuantumShield) { hasQuantumShield = false; snackStreak = 0; this.collected = true; shake = 20; document.getElementById('status').innerText = "SHIELD BROKEN!"; }
                 else { gameState = 'GAMEOVER'; music.pause(); }
             }
         }
         if (!this.collected && this.type === 'snack') {
-            const targets = [{x: lori.x, y: loriJumpY}, {x: azul.x, y: loriJumpY}, {x: mochkil.x, y: canvas.height - GROUND_Y_POS - CHAR_SIZE}];
+            const targets = [{x: lori.x, y: loriJumpY}, {x: azul.x, y: loriJumpY}, {x: mochkil.x, y: canvas.height - GROUND_Y_POS - mochkil.h}];
             targets.forEach(t => {
                 if (t.x < this.x + this.w && t.x + 80 > this.x && t.y < this.y + this.h && t.y + 80 > this.y) {
                     this.collected = true; 
