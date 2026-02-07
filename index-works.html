@@ -314,12 +314,25 @@ function drawBackground() {
         }
     });
     ctx.globalAlpha = 1;
-    if (assets['floor.png'] && assets['floor.png'].complete) {
-        for (let i = 0; i < (canvas.width / 50) + 2; i++) {
-            ctx.drawImage(assets['floor.png'], (-(frame * gameSpeed) % 50) + (i * 50), canvas.height - GROUND_Y_POS, 50, 100);
-        }
+    // --- Updated Floor Tiling Logic ---
+if (assets['floor.png'] && assets['floor.png'].complete) {
+    const tileWidth = 50; // Adjust based on your actual PNG size
+    const tileHeight = 100;
+    
+    // We calculate the offset so the tiles scroll smoothly
+    let floorOffset = (-(frame * gameSpeed) % tileWidth);
+    
+    for (let i = 0; i < (canvas.width / tileWidth) + 2; i++) {
+        ctx.drawImage(
+            assets['floor.png'], 
+            floorOffset + (i * tileWidth), 
+            canvas.height - GROUND_Y_POS, 
+            tileWidth, 
+            tileHeight
+        );
     }
 }
+
 
 function createBurst(x, y, color) {
     for (let i = 0; i < 12; i++) {
