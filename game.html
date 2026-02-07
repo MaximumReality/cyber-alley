@@ -29,11 +29,6 @@
                         linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
             background-size: 100% 4px, 3px 100%; pointer-events: none; z-index: 10;
         }
-        #loader-container {
-            position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%);
-            width: 250px; height: 10px; border: 1px solid #0ff; padding: 2px; z-index: 100;
-        }
-        #loader-bar { width: 0%; height: 100%; background: #0ff; box-shadow: 0 0 15px #0ff; transition: width 0.2s ease-out; }
     </style>
 </head>
 <body>
@@ -43,7 +38,7 @@
     <div class="crt-overlay"></div>
     <div class="ui-layer">
         <div id="scoreDisplay">SCORE: 0</div>
-        <div id="status">REBOOTING SYSTEM...</div>
+        <div id="status">SNACK ATTACK INITIALIZED</div>
         <div id="recentMenu"></div>
     </div>
     <div class="game-controls">
@@ -51,39 +46,38 @@
         <button id="muteBtn" onclick="toggleMute()">🔊</button>
         <button id="pauseBtn" onclick="togglePause()">⏸️</button>
     </div>
-    <div id="loader-container"><div id="loader-bar"></div></div>
     <canvas id="gameCanvas"></canvas>
 
 <script>
-const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
 const music = document.getElementById('bgMusic');
-const GROUND_Y_POS = 120; // Matches height of floor.png
 
-const assets = {};
-let assetsLoaded = 0;
-let totalAssets = 0;
-let frame = 0;
+const GROUND_Y_POS = 120;
 let gameState = 'START';
-let gameSpeed = 0;
 let score = 0;
+let gameSpeed = 0;
+let frame = 0;
 let jumpHeight = 0;
 let yVelocity = 0;
 let jumpCount = 0;
 let hasQuantumShield = true;
+let snackStreak = 0;
 let gameObjects = [];
 let stars = [];
 
 const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 'fish-bones.png', 'smashed-can.png', 'smashed-juice-box.png', 'smashed-soda-can.png', 'detergent.png', 'receipt.png', 'scrub_brush.png', 'toilet_paper.png', 'hand_sanitiser.png', 'kitchen_soap.png', 'frying-pan.png', 'basket_metal.png'];
 const snackPool = ['credit_card_1.png', 'swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png', 'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 'fried-egg.png', 'green_apple.png', 'hotdog.png', 'marshmallows.png', 'milk_chocolate.png', 'pancake_stack.png', 'popcorn.png', 'red_apple.png', 'sandwich.png', 'strawberry-candy.png', 'watermelon-slice.png', 'tuna_can.png', 'ketchup.png', 'soft_drink_blue.png', 'milk_gallon.png', 'orange_juice.png'];
-const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'building-d.png', 'building-e.png', 'building-f.png', 'floor.png'];
+const assets = {};
+const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'floor.png'];
 
-// RESTORED: Old Star Logic
+toLoad.forEach(src => { assets[src] = new Image(); assets[src].src = BASE_URL + src; });
+
 function createStars() {
     stars = Array.from({ length: 80 }, () => ({
-        x: Math.random() * 2000,
-        y: Math.random() * 400,
+        x: Math.random() * canvas.width,
+        y: Math.random() * (canvas.height * 0.5),
         size: Math.random() * 2,
         opacity: Math.random()
     }));
@@ -93,7 +87,7 @@ class Player {
     constructor(name, x, sprites, w, h) {
         this.name = name; this.x = x; this.w = w; this.h = h;
         this.sprites = sprites.map(file => { 
-            const img = new Image(); img.onload = assetLoaded; img.src = BASE_URL + file; 
+            const img = new Image(); img.src = BASE_URL + file; 
             return img; 
         });
         this.frameIndex = 0;
@@ -102,15 +96,14 @@ class Player {
         if (this.name !== 'mochkil' || this.frameIndex !== 0) {
             if (frame % 8 === 0) this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
         }
-        
-        // FIXED: Ground alignment
-        // We draw from the floor line upwards by the height of the sprite
         let groundLine = canvas.height - GROUND_Y_POS;
         let drawY = groundLine - this.h - (this.name !== 'mochkil' ? jumpHeight : 0);
         
-        if (this.sprites[this.frameIndex] && this.sprites[this.frameIndex].complete) {
+        if (this.sprites[this.frameIndex].complete) {
             ctx.save();
-            if (this.name === 'azul' && hasQuantumShield) { ctx.shadowBlur = 15; ctx.shadowColor = "#0ff"; }
+            if (this.name === 'azul' && hasQuantumShield) {
+                ctx.shadowBlur = 20; ctx.shadowColor = "#0ff";
+            }
             ctx.drawImage(this.sprites[this.frameIndex], this.x, drawY, this.w, this.h); 
             ctx.restore();
         }
@@ -121,19 +114,6 @@ const lori = new Player("lori", 50, ['Lori-run.png', 'Lori-run2.png', 'Lori-run3
 const azul = new Player("azul", 160, ['Azul-run.png', 'Azul-run2.png', 'Azul-run3.png'], 65, 65);
 const mochkil = new Player("mochkil", 250, ['Mochkil.png', 'Mochkil2.png'], 75, 75);
 
-totalAssets = toLoad.length + lori.sprites.length + azul.sprites.length + mochkil.sprites.length;
-toLoad.forEach(src => { assets[src] = new Image(); assets[src].onload = assetLoaded; assets[src].src = BASE_URL + src; });
-
-function assetLoaded() {
-    assetsLoaded++;
-    const progress = (assetsLoaded / totalAssets) * 100;
-    document.getElementById('loader-bar').style.width = progress + "%";
-    if (assetsLoaded >= totalAssets) {
-        document.getElementById('status').innerText = "SYSTEM ONLINE: TAP TO START";
-        document.getElementById('loader-container').style.display = 'none';
-    }
-}
-
 class GameObject {
     constructor(type) {
         this.type = type;
@@ -143,8 +123,6 @@ class GameObject {
         this.x = canvas.width + 100; this.collected = false;
         if (this.file.includes('truck')) { this.w = 180; this.h = 100; }
         else { this.w = 55; this.h = 55; }
-        
-        // FIXED: Object ground alignment
         this.y = canvas.height - GROUND_Y_POS - this.h;
         if (type === 'snack') this.y -= (Math.random() > 0.5 ? 0 : 160);
     }
@@ -152,32 +130,33 @@ class GameObject {
         if (this.collected) return;
         this.x -= gameSpeed;
 
-        // RESTORED: Multi-character collision (Mochkil can pick up snacks now!)
         const players = [
-            {x: lori.x, y: (canvas.height - GROUND_Y_POS) - lori.h - jumpHeight, w: lori.w, h: lori.h},
-            {x: azul.x, y: (canvas.height - GROUND_Y_POS) - azul.h - jumpHeight, w: azul.w, h: azul.h},
-            {x: mochkil.x, y: (canvas.height - GROUND_Y_POS) - mochkil.h, w: mochkil.w, h: mochkil.h}
+            {p: lori, y: (canvas.height - GROUND_Y_POS) - lori.h - jumpHeight},
+            {p: azul, y: (canvas.height - GROUND_Y_POS) - azul.h - jumpHeight},
+            {p: mochkil, y: (canvas.height - GROUND_Y_POS) - mochkil.h}
         ];
 
-        players.forEach((p, index) => {
-            if (p.x < this.x + this.w && p.x + p.w > this.x && p.y < this.y + this.h && p.y + p.h > this.y) {
+        players.forEach((char, index) => {
+            if (char.p.x < this.x + this.w && char.p.x + char.p.w > this.x && char.y < this.y + this.h && char.y + char.p.h > this.y) {
                 if (this.type === 'obstacle') {
-                    if (index === 0) { // Only Lori (lead) triggers game over/shield break
-                        if (hasQuantumShield) { hasQuantumShield = false; this.collected = true; document.getElementById('status').innerText = "SHIELD BROKEN!"; }
-                        else { gameState = 'GAMEOVER'; music.pause(); }
+                    if (index === 0) { // Lori hits obstacle
+                        if (hasQuantumShield) {
+                            hasQuantumShield = false; this.collected = true; snackStreak = 0;
+                            document.getElementById('status').innerText = "SHIELD BROKEN!";
+                        } else { gameState = 'GAMEOVER'; music.pause(); }
                     }
-                } else { 
-                    this.collected = true; 
-                    score += 150; 
-                    updateMenu(this.file);
-                    // Visual feedback for Mochkil
-                    mochkil.frameIndex = 1; 
-                    setTimeout(() => { mochkil.frameIndex = 0; }, 200);
+                } else { // Collect Snack
+                    this.collected = true; score += 150; updateMenu(this.file);
+                    if (!hasQuantumShield) {
+                        snackStreak++;
+                        document.getElementById('status').innerText = `REBOOTING: ${snackStreak}/5`;
+                        if (snackStreak >= 5) { hasQuantumShield = true; document.getElementById('status').innerText = "SHIELD RESTORED"; }
+                    }
+                    mochkil.frameIndex = 1; setTimeout(() => { mochkil.frameIndex = 0; }, 200);
                 }
             }
         });
-
-        if (this.img.complete && !this.collected) ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
+        if (this.img.complete) ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
     }
 }
 
@@ -189,31 +168,22 @@ function updateMenu(file) {
 
 function drawBackground() {
     ctx.fillStyle = "#1a0033"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // RESTORED: Old Star Twinkle & Scrolling Logic
     stars.forEach(s => {
         let twinkle = s.opacity * Math.abs(Math.sin(frame / 30 + s.x));
         ctx.globalAlpha = twinkle;
         let starX = (s.x - (frame * 0.1)) % canvas.width;
         if (starX < 0) starX += canvas.width;
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(starX, s.y, s.size, s.size);
+        ctx.fillStyle = "#fff"; ctx.fillRect(starX, s.y, s.size, s.size);
     });
-    ctx.globalAlpha = 1;
-
-    // Buildings
-    const b = ['building-a.png', 'building-b.png', 'building-c.png'];
-    b.forEach((src, i) => {
+    ctx.globalAlpha = 0.3;
+    ['building-a.png', 'building-b.png', 'building-c.png'].forEach((src, i) => {
         if (assets[src] && assets[src].complete) {
-            let xPos = -(frame * (i + 1) * 0.5) % canvas.width;
-            ctx.globalAlpha = 0.4;
+            let xPos = -(frame * (i + 0.5)) % canvas.width;
             ctx.drawImage(assets[src], xPos, 100, canvas.width, canvas.height - 200);
             ctx.drawImage(assets[src], xPos + canvas.width, 100, canvas.width, canvas.height - 200);
         }
     });
     ctx.globalAlpha = 1;
-
-    // Floor
     if (assets['floor.png']) {
         for (let i = 0; i < (canvas.width / 100) + 2; i++) {
             ctx.drawImage(assets['floor.png'], (-(frame * gameSpeed) % 100) + (i * 100), canvas.height - GROUND_Y_POS, 100, 120);
@@ -230,8 +200,8 @@ function handleJump() {
     } else if (jumpCount < 2) { yVelocity = -20; jumpCount++; }
 }
 
-window.addEventListener('touchstart', (e) => { if(e.target.tagName !== 'BUTTON') { e.preventDefault(); handleJump(); } }, { passive: false });
 window.addEventListener('mousedown', (e) => { if(e.target.tagName !== 'BUTTON') handleJump(); });
+window.addEventListener('touchstart', (e) => { if(e.target.tagName !== 'BUTTON') { e.preventDefault(); handleJump(); } }, { passive: false });
 
 function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -246,10 +216,9 @@ function animate() {
     }
     lori.draw(); azul.draw(); mochkil.draw();
     if (gameState !== 'PLAYING') {
-        ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(0,0,canvas.width,canvas.height);
-        ctx.fillStyle = "#0ff"; ctx.textAlign = "center"; ctx.font = "20px Courier";
+        ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle = "#0ff"; ctx.textAlign = "center"; ctx.font = "24px Courier";
         ctx.fillText(gameState === 'START' ? "MAXIMUM REALITY" : "GAME OVER", canvas.width/2, canvas.height/2);
-        ctx.fillText("TAP TO START", canvas.width/2, canvas.height/2 + 40);
     }
     requestAnimationFrame(animate);
 }
