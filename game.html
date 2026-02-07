@@ -8,42 +8,32 @@
         body { 
             margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', Courier, monospace;
             position: fixed; width: 100%; height: 100%;
-            -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
         }
-        .game-controls { position: absolute; top: 20px; right: 20px; display: flex; gap: 15px; z-index: 100; }
-        .game-controls button {
-            background: rgba(0, 255, 255, 0.05); border: 1px solid rgba(0, 255, 255, 0.3);
-            color: #0ff; padding: 5px 10px; font-size: 16px; border-radius: 3px; backdrop-filter: blur(2px);
+        #gameCanvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
+        
+        /* THE LOADER BAR YOU NEEDED */
+        #loader-container {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 200px; height: 15px; border: 2px solid #0ff; padding: 3px; z-index: 200;
         }
-        #gameCanvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; touch-action: none; }
-        .ui-layer {
-            position: absolute; top: 0; width: 100%; text-align: left; color: #0ff; 
-            text-shadow: 0 0 10px #0ff; pointer-events: none; padding-top: env(safe-area-inset-top); 
-            padding-left: 20px; z-index: 5;
-        }
-        #recentMenu { margin-top: 70px; display: flex; justify-content: center; gap: 10px; height: 40px; }
-        #recentMenu img { width: 40px; height: 40px; background: rgba(0,255,255,0.1); border-radius: 5px; border: 1px solid #0ff; }
-        .crt-overlay {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), 
-                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
-            background-size: 100% 4px, 3px 100%; pointer-events: none; z-index: 10;
-        }
+        #loader-bar { width: 0%; height: 100%; background: #0ff; box-shadow: 0 0 10px #0ff; }
+
+        .ui-layer { position: absolute; top: 20px; left: 20px; color: #0ff; text-shadow: 0 0 10px #0ff; z-index: 5; pointer-events: none; }
+        .game-controls { position: absolute; top: 20px; right: 20px; display: flex; gap: 10px; z-index: 100; }
+        .game-controls button { background: rgba(0,255,255,0.1); border: 1px solid #0ff; color: #0ff; padding: 8px; border-radius: 5px; }
+        #recentMenu { position: absolute; top: 80px; left: 20px; display: flex; gap: 5px; }
+        #recentMenu img { width: 40px; height: 40px; border: 1px solid #0ff; background: rgba(0,255,255,0.1); }
     </style>
 </head>
 <body>
-    <audio id="bgMusic" loop>
-        <source src="https://maximumreality.github.io/cyber-alley/futuristic-cyberpunk-industrial-music.mp3" type="audio/mpeg">
-    </audio>
-    <div class="crt-overlay"></div>
+    <div id="loader-container"><div id="loader-bar"></div></div>
     <div class="ui-layer">
         <div id="scoreDisplay">SCORE: 0</div>
-        <div id="status">SNACK ATTACK INITIALIZED</div>
-        <div id="recentMenu"></div>
+        <div id="status">LOADING SYSTEM...</div>
     </div>
+    <div id="recentMenu"></div>
     <div class="game-controls">
-        <button onclick="window.location.href='https://maximumreality.xyz'">🏠</button>
-        <button id="muteBtn" onclick="toggleMute()">🔊</button>
+        <button onclick="location.reload()">🏠</button>
         <button id="pauseBtn" onclick="togglePause()">⏸️</button>
     </div>
     <canvas id="gameCanvas"></canvas>
@@ -52,44 +42,62 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
-const music = document.getElementById('bgMusic');
 
+// PHYSICS CONFIG (From your working version)
 const GROUND_Y_POS = 120;
+let assetsLoaded = 0;
+let totalAssets = 0;
+let frame = 0;
 let gameState = 'START';
 let score = 0;
-let gameSpeed = 0;
-let frame = 0;
+let gameSpeed = 6;
 let jumpHeight = 0;
 let yVelocity = 0;
 let jumpCount = 0;
 let hasQuantumShield = true;
 let snackStreak = 0;
 let gameObjects = [];
-let stars = [];
 
+// ASSETS
 const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 'fish-bones.png', 'smashed-can.png', 'smashed-juice-box.png', 'smashed-soda-can.png', 'detergent.png', 'receipt.png', 'scrub_brush.png', 'toilet_paper.png', 'hand_sanitiser.png', 'kitchen_soap.png', 'frying-pan.png', 'basket_metal.png'];
 const snackPool = ['credit_card_1.png', 'swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png', 'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 'fried-egg.png', 'green_apple.png', 'hotdog.png', 'marshmallows.png', 'milk_chocolate.png', 'pancake_stack.png', 'popcorn.png', 'red_apple.png', 'sandwich.png', 'strawberry-candy.png', 'watermelon-slice.png', 'tuna_can.png', 'ketchup.png', 'soft_drink_blue.png', 'milk_gallon.png', 'orange_juice.png'];
-const assets = {};
 const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'floor.png'];
+const assets = {};
 
-toLoad.forEach(src => { assets[src] = new Image(); assets[src].src = BASE_URL + src; });
+// OLD STARS (The way you liked them)
+const stars = Array.from({ length: 80 }, () => ({
+    x: Math.random() * 2000,
+    y: Math.random() * 400,
+    size: Math.random() * 2,
+    opacity: Math.random()
+}));
 
-function createStars() {
-    stars = Array.from({ length: 80 }, () => ({
-        x: Math.random() * canvas.width,
-        y: Math.random() * (canvas.height * 0.5),
-        size: Math.random() * 2,
-        opacity: Math.random()
-    }));
+function loadAssets() {
+    const playerSprites = [
+        'Lori-run.png', 'Lori-run2.png', 'Lori-run3.png',
+        'Azul-run.png', 'Azul-run2.png', 'Azul-run3.png',
+        'Mochkil.png', 'Mochkil2.png'
+    ];
+    const all = [...toLoad, ...playerSprites];
+    totalAssets = all.length;
+    all.forEach(src => {
+        assets[src] = new Image();
+        assets[src].onload = () => {
+            assetsLoaded++;
+            document.getElementById('loader-bar').style.width = (assetsLoaded / totalAssets * 100) + "%";
+            if (assetsLoaded === totalAssets) {
+                document.getElementById('loader-container').style.display = 'none';
+                document.getElementById('status').innerText = "SYSTEM ACTIVE: TAP TO START";
+            }
+        };
+        assets[src].src = BASE_URL + src;
+    });
 }
 
 class Player {
     constructor(name, x, sprites, w, h) {
         this.name = name; this.x = x; this.w = w; this.h = h;
-        this.sprites = sprites.map(file => { 
-            const img = new Image(); img.src = BASE_URL + file; 
-            return img; 
-        });
+        this.sprites = sprites;
         this.frameIndex = 0;
     }
     draw() {
@@ -99,12 +107,11 @@ class Player {
         let groundLine = canvas.height - GROUND_Y_POS;
         let drawY = groundLine - this.h - (this.name !== 'mochkil' ? jumpHeight : 0);
         
-        if (this.sprites[this.frameIndex].complete) {
+        const img = assets[this.sprites[this.frameIndex]];
+        if (img && img.complete) {
             ctx.save();
-            if (this.name === 'azul' && hasQuantumShield) {
-                ctx.shadowBlur = 20; ctx.shadowColor = "#0ff";
-            }
-            ctx.drawImage(this.sprites[this.frameIndex], this.x, drawY, this.w, this.h); 
+            if (this.name === 'azul' && hasQuantumShield) { ctx.shadowBlur = 20; ctx.shadowColor = "#0ff"; }
+            ctx.drawImage(img, this.x, drawY, this.w, this.h);
             ctx.restore();
         }
     }
@@ -121,8 +128,8 @@ class GameObject {
         this.file = pool[Math.floor(Math.random() * pool.length)];
         this.img = new Image(); this.img.src = BASE_URL + this.file;
         this.x = canvas.width + 100; this.collected = false;
-        if (this.file.includes('truck')) { this.w = 180; this.h = 100; }
-        else { this.w = 55; this.h = 55; }
+        this.w = this.file.includes('truck') ? 180 : 55;
+        this.h = this.file.includes('truck') ? 100 : 55;
         this.y = canvas.height - GROUND_Y_POS - this.h;
         if (type === 'snack') this.y -= (Math.random() > 0.5 ? 0 : 160);
     }
@@ -130,40 +137,27 @@ class GameObject {
         if (this.collected) return;
         this.x -= gameSpeed;
 
-        const players = [
+        // MULTI-CHARACTER COLLISION (Mochkil's job)
+        const team = [
             {p: lori, y: (canvas.height - GROUND_Y_POS) - lori.h - jumpHeight},
             {p: azul, y: (canvas.height - GROUND_Y_POS) - azul.h - jumpHeight},
             {p: mochkil, y: (canvas.height - GROUND_Y_POS) - mochkil.h}
         ];
 
-        players.forEach((char, index) => {
-            if (char.p.x < this.x + this.w && char.p.x + char.p.w > this.x && char.y < this.y + this.h && char.y + char.p.h > this.y) {
-                if (this.type === 'obstacle') {
-                    if (index === 0) { // Lori hits obstacle
-                        if (hasQuantumShield) {
-                            hasQuantumShield = false; this.collected = true; snackStreak = 0;
-                            document.getElementById('status').innerText = "SHIELD BROKEN!";
-                        } else { gameState = 'GAMEOVER'; music.pause(); }
-                    }
-                } else { // Collect Snack
-                    this.collected = true; score += 150; updateMenu(this.file);
-                    if (!hasQuantumShield) {
-                        snackStreak++;
-                        document.getElementById('status').innerText = `REBOOTING: ${snackStreak}/5`;
-                        if (snackStreak >= 5) { hasQuantumShield = true; document.getElementById('status').innerText = "SHIELD RESTORED"; }
-                    }
-                    mochkil.frameIndex = 1; setTimeout(() => { mochkil.frameIndex = 0; }, 200);
+        team.forEach((member, i) => {
+            if (member.p.x < this.x + this.w && member.p.x + member.p.w > this.x && member.y < this.y + this.h && member.y + member.p.h > this.y) {
+                if (this.type === 'obstacle' && i === 0) {
+                    if (hasQuantumShield) { hasQuantumShield = false; this.collected = true; document.getElementById('status').innerText = "SHIELD BROKEN!"; }
+                    else gameState = 'GAMEOVER';
+                } else if (this.type === 'snack') {
+                    this.collected = true; score += 150;
+                    if (!hasQuantumShield) { snackStreak++; if (snackStreak >= 5) { hasQuantumShield = true; snackStreak = 0; } }
+                    mochkil.frameIndex = 1; setTimeout(() => { mochkil.frameIndex = 0; }, 300);
                 }
             }
         });
         if (this.img.complete) ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
     }
-}
-
-function updateMenu(file) {
-    const menu = document.getElementById('recentMenu');
-    menu.innerHTML = `<img src="${BASE_URL + file}">` + menu.innerHTML;
-    if (menu.children.length > 5) menu.removeChild(menu.lastChild);
 }
 
 function drawBackground() {
@@ -177,10 +171,10 @@ function drawBackground() {
     });
     ctx.globalAlpha = 0.3;
     ['building-a.png', 'building-b.png', 'building-c.png'].forEach((src, i) => {
-        if (assets[src] && assets[src].complete) {
-            let xPos = -(frame * (i + 0.5)) % canvas.width;
-            ctx.drawImage(assets[src], xPos, 100, canvas.width, canvas.height - 200);
-            ctx.drawImage(assets[src], xPos + canvas.width, 100, canvas.width, canvas.height - 200);
+        if (assets[src]) {
+            let xPos = -(frame * (i + 1) * 0.5) % canvas.width;
+            ctx.drawImage(assets[src], xPos, 50, canvas.width, canvas.height - 100);
+            ctx.drawImage(assets[src], xPos + canvas.width, 50, canvas.width, canvas.height - 100);
         }
     });
     ctx.globalAlpha = 1;
@@ -192,16 +186,12 @@ function drawBackground() {
 }
 
 function handleJump() {
-    if (gameState !== 'PLAYING') {
-        score = 0; gameObjects = []; gameSpeed = 6; gameState = 'PLAYING'; frame = 0;
-        jumpHeight = 0; jumpCount = 0; hasQuantumShield = true; music.play();
-        document.getElementById('recentMenu').innerHTML = '';
-        document.getElementById('status').innerText = "SYSTEM ACTIVE";
-    } else if (jumpCount < 2) { yVelocity = -20; jumpCount++; }
+    if (gameState !== 'PLAYING') { gameState = 'PLAYING'; score = 0; gameObjects = []; document.getElementById('status').innerText = "SYSTEM ACTIVE"; }
+    else if (jumpCount < 2) { yVelocity = -20; jumpCount++; }
 }
 
-window.addEventListener('mousedown', (e) => { if(e.target.tagName !== 'BUTTON') handleJump(); });
-window.addEventListener('touchstart', (e) => { if(e.target.tagName !== 'BUTTON') { e.preventDefault(); handleJump(); } }, { passive: false });
+window.addEventListener('mousedown', handleJump);
+window.addEventListener('touchstart', (e) => { e.preventDefault(); handleJump(); }, {passive: false});
 
 function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -215,19 +205,12 @@ function animate() {
         document.getElementById('scoreDisplay').innerText = `SCORE: ${score}`;
     }
     lori.draw(); azul.draw(); mochkil.draw();
-    if (gameState !== 'PLAYING') {
-        ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0,0,canvas.width,canvas.height);
-        ctx.fillStyle = "#0ff"; ctx.textAlign = "center"; ctx.font = "24px Courier";
-        ctx.fillText(gameState === 'START' ? "MAXIMUM REALITY" : "GAME OVER", canvas.width/2, canvas.height/2);
-    }
     requestAnimationFrame(animate);
 }
-function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; createStars(); }
-window.addEventListener('resize', resize);
-resize(); animate();
 
-function toggleMute() { music.muted = !music.muted; document.getElementById('muteBtn').innerText = music.muted ? "🔇" : "🔊"; }
-function togglePause() { if(gameState==='PLAYING') gameSpeed = gameSpeed === 0 ? 6 : 0; }
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize);
+resize(); loadAssets(); animate();
 </script>
 </body>
 </html>
