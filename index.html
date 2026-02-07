@@ -167,6 +167,7 @@ let snackStreak = 0;
 let recentSnacks = [];
 let gameObjects = [];
 let shake = 0;
+let particles = []; // This holds our ✨ sparks
 
 // --- RESTORED FULL ASSET POOLS ---
 const obstaclePool = [
@@ -262,6 +263,10 @@ class GameObject {
             targets.forEach(t => {
                 if (t.x < this.x + this.w && t.x + 80 > this.x && t.y < this.y + this.h && t.y + 80 > this.y) {
                     this.collected = true; 
+
+                      // TRIGGER ✨ HERE:
+    createBurst(this.x, this.y, '#00ffff'); // Cyan sparks for that cyberpunk feel
+    
                     if (this.file.includes('snack-portal')) {
                         handlePortalEntry();
                     } else {
@@ -336,6 +341,17 @@ function drawBackground() {
         }
     }
 }
+function createBurst(x, y, color) {
+    for (let i = 0; i < 10; i++) {
+        particles.push({
+            x: x, y: y,
+            vX: (Math.random() - 0.5) * 10,
+            vY: (Math.random() - 0.5) * 10,
+            life: 1.0,
+            color: color
+        });
+    }
+}
 
 
     function animate() {
@@ -355,6 +371,20 @@ function drawBackground() {
 
     // --- 3. ENVIRONMENT & SCORE ---
     drawBackground(); // This handles your day/night sky colors!
+
+    // --- NEW: RENDER ✨ PARTICLES ---
+    particles.forEach((p, i) => {
+        p.x += p.vX; 
+        p.y += p.vY; 
+        p.life -= 0.02; // Sparkles fade away slowly
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, 4, 4); // Small pixel sparks
+        if (p.life <= 0) particles.splice(i, 1);
+    });
+    ctx.globalAlpha = 1; // Reset transparency so the cats don't disappear!
+
+
 
     if (gameState === 'PLAYING') {
         frame++;
