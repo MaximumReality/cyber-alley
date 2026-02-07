@@ -339,24 +339,29 @@ function drawBackground() {
 
 
     function animate() {
+    // --- 1. PAUSE CHECK ---
     if (isPaused) {
         requestAnimationFrame(animate);
         return; 
     }
-    // ... rest of your existing animate code
 
+    // --- 2. SCREEN SHAKE & CLEAR ---
     ctx.save();
     if (shake > 0) {
         ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
         shake *= 0.9; if (shake < 0.5) shake = 0;
     }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawBackground();
+
+    // --- 3. ENVIRONMENT & SCORE ---
+    drawBackground(); // This handles your day/night sky colors!
 
     if (gameState === 'PLAYING') {
         frame++;
-        const portalExists = gameObjects.some(obj => obj.file.includes('snack-portal'));
-        if (score >= 2000 && currentBiome === 'night' && !portalExists && !isTransitioning) {
+        // ... (rest of your logic for spawning obstacles and snacks)
+
+            const portalExists = gameObjects.some(obj => obj.file.includes('snack-portal'));
+            if (score >= 2000 && currentBiome === 'night' && !portalExists && !isTransitioning) {
             let portal = new GameObject('snack');
             portal.file = 'snack-portal.png';
             portal.img.src = BASE_URL + portal.file;
