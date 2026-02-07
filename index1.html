@@ -75,8 +75,23 @@ let gameObjects = [];
 let shake = 0; // Global shake variable
 
 // --- ASSETS ---
-const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 'fish-bones.png', 'smashed-can.png'];
-const snackPool = ['swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png'];
+// --- EXPANDED ASSET POOLS ---
+const obstaclePool = [
+    'dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 
+    'fish-bones.png', 'smashed-can.png', 'smashed-juice-box.png', 'smashed-soda-can.png',
+    'detergent.png', 'receipt.png', 'scrub_brush.png', 'toilet_paper.png', 
+    'hand_sanitiser.png', 'kitchen_soap.png', 'frying-pan.png'
+];
+
+const snackPool = [
+    'swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 
+    'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png',
+    'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 'fried-egg.png',
+    'green_apple.png', 'hotdog.png', 'marshmallows.png', 'milk_chocolate.png',
+    'pancake_stack.png', 'popcorn.png', 'red_apple.png', 'sandwich.png', 
+    'strawberry-candy.png', 'watermelon-slice.png', 'tuna_can.png'
+];
+
 const assets = {};
 const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'floor.png'];
 toLoad.forEach(src => { assets[src] = new Image(); assets[src].src = BASE_URL + src; });
