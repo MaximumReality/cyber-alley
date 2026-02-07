@@ -56,7 +56,6 @@
     <canvas id="gameCanvas"></canvas>
 
 <script>
-// --- CONFIG & ASSETS ---
 const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
 const assets = {};
 let assetsLoaded = 0;
@@ -66,7 +65,6 @@ const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png',
 const snackPool = ['credit_card_1.png', 'swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png', 'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 'fried-egg.png', 'green_apple.png', 'hotdog.png', 'marshmallows.png', 'milk_chocolate.png', 'pancake_stack.png', 'popcorn.png', 'red_apple.png', 'sandwich.png', 'strawberry-candy.png', 'watermelon-slice.png', 'tuna_can.png', 'ketchup.png', 'soft_drink_blue.png', 'milk_gallon.png', 'orange_juice.png'];
 const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'building-d.png', 'building-e.png', 'building-f.png', 'floor.png', 'snack-portal.png'];
 
-// --- PLAYER SIZING ---
 class Player {
     constructor(name, x, sprites, w, h) {
         this.name = name; this.x = x; this.w = w; this.h = h;
@@ -80,9 +78,15 @@ class Player {
         if (this.name !== 'mochkil' || this.frameIndex !== 0) {
             if (frame % 8 === 0) this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
         }
-        let groundBase = canvas.height - GROUND_Y_POS;
-        let drawY = groundBase - this.h - (this.name !== 'mochkil' ? jumpHeight : 0);
         
+        // FOOT ANCHOR FIX:
+        let groundLine = canvas.height - 120; // Matches GROUND_Y_POS
+        let drawY = groundLine - this.h - (this.name !== 'mochkil' ? jumpHeight : 0);
+        
+        // Tiny nudge to make them look "on" the street
+        if (this.name === 'mochkil') drawY += 5; 
+        if (this.name === 'lori') drawY += 2;
+
         if (this.sprites[this.frameIndex] && this.sprites[this.frameIndex].complete) {
             ctx.save();
             if (this.name === 'azul' && hasQuantumShield) { ctx.shadowBlur = 15; ctx.shadowColor = "#0ff"; }
@@ -96,7 +100,6 @@ const lori = new Player("lori", 50, ['Lori-run.png', 'Lori-run2.png', 'Lori-run3
 const azul = new Player("azul", 160, ['Azul-run.png', 'Azul-run2.png', 'Azul-run3.png'], 65, 65);
 const mochkil = new Player("mochkil", 250, ['Mochkil.png', 'Mochkil2.png'], 75, 75);
 
-// --- STAR SYSTEM ---
 let stars = [];
 function createStars() {
     stars = [];
@@ -106,7 +109,6 @@ function createStars() {
 }
 createStars();
 
-// --- GAME STATE ---
 let gameState = 'START'; 
 let score = 0;
 let frame = 0;
@@ -116,8 +118,6 @@ let yVelocity = 0;
 let jumpCount = 0;
 let hasQuantumShield = true;
 let gameObjects = [];
-let particles = [];
-let currentBiome = 'night';
 const GROUND_Y_POS = 120;
 const gravity = 1.2;
 const canvas = document.getElementById('gameCanvas');
@@ -152,15 +152,17 @@ class GameObject {
         if (this.file.includes('truck')) { this.w = 180; this.h = 100; }
         else if (this.file.includes('dumpster')) { this.w = 120; this.h = 90; }
         else { this.w = 50; this.h = 50; }
-        this.y = canvas.height - GROUND_Y_POS - this.h;
+        
+        // GameObject Foot Anchor Fix
+        this.y = canvas.height - GROUND_Y_POS - this.h + 5; 
         if (type === 'snack') this.y -= (Math.random() > 0.5 ? 0 : 160);
     }
     update() {
         if (!this.isValid || this.collected) return;
         this.x -= gameSpeed;
-        const loriY = canvas.height - GROUND_Y_POS - 120 - jumpHeight;
+        let groundLine = canvas.height - GROUND_Y_POS;
+        let loriY = groundLine - 120 - jumpHeight;
         
-        // Collision
         if (lori.x < this.x + this.w && lori.x + lori.w > this.x && loriY < this.y + this.h && loriY + 120 > this.y) {
             if (this.type === 'obstacle') {
                 if (hasQuantumShield) { hasQuantumShield = false; this.collected = true; document.getElementById('status').innerText = "SHIELD BROKEN!"; }
@@ -202,8 +204,8 @@ function drawBackground() {
     });
     ctx.globalAlpha = 1;
     if (assets['floor.png']) {
-        for (let i = 0; i < (canvas.width / 50) + 2; i++) {
-            ctx.drawImage(assets['floor.png'], (-(frame * gameSpeed) % 50) + (i * 50), canvas.height - GROUND_Y_POS, 50, 100);
+        for (let i = 0; i < (canvas.width / 100) + 2; i++) {
+            ctx.drawImage(assets['floor.png'], (-(frame * gameSpeed) % 100) + (i * 100), canvas.height - GROUND_Y_POS, 100, 120);
         }
     }
 }
@@ -219,8 +221,8 @@ function handleJump() {
     else if (jumpCount < 2) { yVelocity = -20; jumpCount++; }
 }
 
-window.addEventListener('touchstart', (e) => { e.preventDefault(); handleJump(); }, { passive: false });
-window.addEventListener('mousedown', handleJump);
+window.addEventListener('touchstart', (e) => { if(e.target.tagName !== 'BUTTON') { e.preventDefault(); handleJump(); } }, { passive: false });
+window.addEventListener('mousedown', (e) => { if(e.target.tagName !== 'BUTTON') handleJump(); });
 
 function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
