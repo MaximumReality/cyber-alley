@@ -59,6 +59,7 @@ let jumpHeight = 0;
 let yVelocity = 0;
 let jumpCount = 0;
 let hasQuantumShield = true;
+let snackStreak = 0; // Add this line
 let recentSnacks = [];
 let gameObjects = [];
 let shake = 0; // Global shake variable
@@ -125,30 +126,51 @@ class GameObject {
         const loriJumpY = canvas.height - GROUND_Y_POS - CHAR_SIZE - jumpHeight;
         const groundY = canvas.height - GROUND_Y_POS - CHAR_SIZE;
 
-        if (!this.collected && this.type === 'obstacle') {
-            const loriHitX = lori.x + 35;
-            if (loriHitX < this.x + this.w - 15 && loriHitX + 30 > this.x + 15 && loriJumpY + 85 > this.y + 10 && loriJumpY + 15 < this.y + this.h) {
-                if (hasQuantumShield) {
-                    hasQuantumShield = false; 
-                    this.collected = true;
-                    shake = 20; // Trigger shake on shield hit
-                    document.getElementById('status').innerText = "AZUL HACKED THE SYSTEM: SHIELD DOWN";
-                } else { 
-                    gameState = 'GAMEOVER'; 
-                    music.pause(); 
+        // --- Inside GameObject update() ---
+
+// OBSTACLE LOGIC
+if (!this.collected && this.type === 'obstacle') {
+    const loriHitX = lori.x + 35;
+    if (loriHitX < this.x + this.w - 15 && loriHitX + 30 > this.x + 15 && loriJumpY + 85 > this.y + 10 && loriJumpY + 15 < this.y + this.h) {
+        if (hasQuantumShield) {
+            hasQuantumShield = false; 
+            snackStreak = 0; // RESET STREAK ON HIT
+            this.collected = true;
+            shake = 20; 
+            document.getElementById('status').innerText = "SHIELD BROKEN! GET 5 SNACKS TO REBOOT";
+        } else { 
+            gameState = 'GAMEOVER'; 
+            music.pause(); 
+        }
+    }
+}
+
+// SNACK LOGIC
+if (!this.collected && this.type === 'snack') {
+    const targets = [{x: lori.x, y: loriJumpY}, {x: azul.x, y: loriJumpY}, {x: mochkil.x, y: groundY}];
+    targets.forEach(t => {
+        if (t.x < this.x + this.w && t.x + 80 > this.x && t.y < this.y + this.h && t.y + 80 > this.y) {
+            this.collected = true; 
+            score += 150; 
+            updateMenu(this.file);
+            
+            // REGEN LOGIC
+            if (!hasQuantumShield) {
+                snackStreak++;
+                document.getElementById('status').innerText = `REBOOTING SHIELD: ${snackStreak}/5`;
+                if (snackStreak >= 5) {
+                    hasQuantumShield = true;
+                    snackStreak = 0;
+                    document.getElementById('status').innerText = "QUANTUM SHIELD RESTORED";
                 }
             }
+
+            mochkil.frameIndex = 1; 
+            setTimeout(() => { if(gameState==='PLAYING') mochkil.frameIndex = 0; }, 600);
         }
-        if (!this.collected && this.type === 'snack') {
-            const targets = [{x: lori.x, y: loriJumpY}, {x: azul.x, y: loriJumpY}, {x: mochkil.x, y: groundY}];
-            targets.forEach(t => {
-                if (t.x < this.x + this.w && t.x + 80 > this.x && t.y < this.y + this.h && t.y + 80 > this.y) {
-                    this.collected = true; score += 150; updateMenu(this.file);
-                    mochkil.frameIndex = 1; 
-                    setTimeout(() => { if(gameState==='PLAYING') mochkil.frameIndex = 0; }, 600);
-                }
-            });
-        }
+    });
+}
+
         if (this.img.complete && !this.collected) ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
     }
 }
@@ -159,12 +181,21 @@ function handleJump() {
 }
 
 function resetGame() {
-    score = 0; gameObjects = []; gameSpeed = baseSpeed; frame = 0; gameState = 'PLAYING';
-    recentSnacks = []; jumpCount = 0; jumpHeight = 0; hasQuantumShield = true;
+    score = 0; 
+    snackStreak = 0; // Reset streak
+    gameObjects = []; 
+    gameSpeed = baseSpeed; 
+    frame = 0; 
+    gameState = 'PLAYING';
+    recentSnacks = []; 
+    jumpCount = 0; 
+    jumpHeight = 0; 
+    hasQuantumShield = true;
     music.play().catch(() => {});
     document.getElementById('recentMenu').innerHTML = '';
     document.getElementById('status').innerText = "SYSTEMS ONLINE";
 }
+
 
 window.addEventListener('touchstart', (e) => { if (e.target.id === 'gameCanvas') { e.preventDefault(); handleJump(); } }, { passive: false });
 window.addEventListener('mousedown', handleJump);
