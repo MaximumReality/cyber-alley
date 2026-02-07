@@ -9,18 +9,18 @@
         #gameCanvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
         .ui-layer { position: absolute; top: 20px; left: 20px; color: #0ff; text-shadow: 0 0 10px #0ff; z-index: 10; pointer-events: none; }
         #overlay-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 200; }
-        #start-btn { display: none; background: transparent; border: 2px solid #0ff; color: #0ff; padding: 20px; font-size: 20px; cursor: pointer; box-shadow: 0 0 15px #0ff; }
+        #start-btn { display: none; background: transparent; border: 2px solid #0ff; color: #0ff; padding: 20px; font-size: 20px; cursor: pointer; box-shadow: 0 0 15px #0ff; text-transform: uppercase; }
         .hidden { display: none !important; }
     </style>
 </head>
 <body>
     <div id="overlay-screen">
         <button id="start-btn" onclick="startGame()">CONNECT TO REALITY</button>
-        <div id="loader-text" style="color: #0ff; margin-top: 20px;">INITIALIZING SYSTEM...</div>
+        <div id="loader-text" style="color: #0ff; margin-top: 20px;">SYNCING SECTOR...</div>
     </div>
     <div class="ui-layer">
         <div id="scoreDisplay">SCORE: 0</div>
-        <div id="status">READY</div>
+        <div id="status">SYSTEM ONLINE</div>
     </div>
     <canvas id="gameCanvas"></canvas>
 
@@ -29,9 +29,10 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
 
-// --- 1. CONFIG & ASSETS ---
+// --- CONFIG & STATE ---
 const GROUND_HEIGHT = 100;
 let gameState = 'LOADING';
+let currentBiome = 'night';
 let score = 0;
 let frame = 0;
 let jumpHeight = 0;
@@ -39,35 +40,29 @@ let yVelocity = 0;
 let jumpCount = 0;
 let hasQuantumShield = true;
 let gameObjects = [];
+const stars = Array.from({ length: 80 }, () => ({ x: Math.random() * 2000, y: Math.random() * 400, size: Math.random() * 2, opacity: Math.random() }));
 
-const assetFiles = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'floor.png', 'Lori-run.png', 'Lori-run2.png', 'Lori-run3.png', 'Azul-run.png', 'Azul-run2.png', 'Azul-run3.png', 'Mochkil.png', 'Mochkil2.png'];
+// --- ASSETS ---
+const assetFiles = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'floor.png', 'Lori-run.png', 'Lori-run2.png', 'Lori-run3.png', 'Azul-run.png', 'Azul-run2.png', 'Azul-run3.png', 'Mochkil.png', 'Mochkil2.png', 'pizza-slice.png', 'pink-donut.png', 'dumpster.png'];
 const assets = {};
 let loadedCount = 0;
 
-// --- 2. INDESTRUCTIBLE LOADER ---
 function loadAssets() {
-    // FORCE START: If images take more than 3 seconds, just show the button anyway
-    setTimeout(() => {
-        const btn = document.getElementById('start-btn');
-        if (btn) btn.style.display = 'block';
-        document.getElementById('loader-text').innerText = "SYSTEM BYPASS ACTIVE";
-    }, 3000);
-
     assetFiles.forEach(file => {
         const img = new Image();
         img.onload = () => {
             loadedCount++;
             if (loadedCount >= assetFiles.length) {
                 document.getElementById('start-btn').style.display = 'block';
-                document.getElementById('loader-text').innerText = "SYSTEM ONLINE";
+                document.getElementById('loader-text').innerText = "LINK ESTABLISHED";
             }
         };
-        img.onerror = () => {
-            loadedCount++; // Pretend it loaded so we don't get stuck
-        };
+        img.onerror = () => loadedCount++;
         img.src = BASE_URL + file;
         assets[file] = img;
     });
+    // Fail-safe start
+    setTimeout(() => { document.getElementById('start-btn').style.display = 'block'; }, 4000);
 }
 
 function startGame() {
@@ -75,7 +70,7 @@ function startGame() {
     gameState = 'PLAYING';
 }
 
-// --- 3. THE TEAM ---
+// --- CLASSES ---
 class Player {
     constructor(name, x, sprites, w, h) {
         this.name = name; this.x = x; this.sprites = sprites; this.w = w; this.h = h;
@@ -86,7 +81,36 @@ class Player {
         const drawY = canvas.height - GROUND_HEIGHT - this.h - (this.name !== 'mochkil' ? jumpHeight : 0);
         const img = assets[this.sprites[this.frame]];
         if (img && img.complete) {
+            ctx.save();
+            if (this.name === 'azul' && hasQuantumShield) { ctx.shadowBlur = 15; ctx.shadowColor = "#0ff"; }
             ctx.drawImage(img, this.x, drawY, this.w, this.h);
+            ctx.restore();
+        }
+    }
+}
+
+class GameObject {
+    constructor(type) {
+        this.type = type;
+        this.file = type === 'snack' ? (Math.random() > 0.5 ? 'pizza-slice.png' : 'pink-donut.png') : 'dumpster.png';
+        this.x = canvas.width + 100;
+        this.w = 50; this.h = 50;
+        this.y = canvas.height - GROUND_HEIGHT - this.h;
+        if (type === 'snack') this.y -= (Math.random() > 0.5 ? 0 : 150);
+        this.collected = false;
+    }
+    update() {
+        this.x -= 6;
+        const img = assets[this.file];
+        if (img && img.complete && !this.collected) {
+            ctx.drawImage(img, this.x, this.y, this.w, this.h);
+        }
+        // Collision
+        if (!this.collected && this.x < 150 && this.x > 50 && (canvas.height - GROUND_HEIGHT - jumpHeight) < this.y + this.h) {
+            this.collected = true;
+            if (this.type === 'snack') score += 100;
+            else if (!hasQuantumShield) gameState = 'GAMEOVER';
+            else hasQuantumShield = false;
         }
     }
 }
@@ -95,45 +119,86 @@ const lori = new Player("lori", 50, ['Lori-run.png', 'Lori-run2.png', 'Lori-run3
 const azul = new Player("azul", 150, ['Azul-run.png', 'Azul-run2.png', 'Azul-run3.png'], 60, 60);
 const mochkil = new Player("mochkil", 240, ['Mochkil.png', 'Mochkil2.png'], 70, 70);
 
-// --- 4. THE ENGINE ---
+// --- MAIN LOOP ---
 function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Background
+    // 1. SKY & STARS
     ctx.fillStyle = "#1a0033";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#fff";
+    stars.forEach(s => {
+        let sx = (s.x - (frame * 0.1)) % canvas.width;
+        if (sx < 0) sx += canvas.width;
+        ctx.globalAlpha = s.opacity;
+        ctx.fillRect(sx, s.y, s.size, s.size);
+    });
+    ctx.globalAlpha = 1;
 
     if (gameState === 'PLAYING') {
         frame++;
-        
-        // Floor
-        if (assets['floor.png']) {
+
+        // 2. PARALLAX CITY
+        const buildings = ['building-c.png', 'building-b.png', 'building-a.png'];
+        buildings.forEach((src, i) => {
+            const img = assets[src];
+            if (img && img.complete) {
+                let xPos = -(frame * (0.5 + i * 0.5)) % canvas.width;
+                ctx.globalAlpha = 0.4 + (i * 0.2);
+                ctx.drawImage(img, xPos, canvas.height - GROUND_HEIGHT - 400, canvas.width, 400);
+                ctx.drawImage(img, xPos + canvas.width, canvas.height - GROUND_HEIGHT - 400, canvas.width, 400);
+            }
+        });
+        ctx.globalAlpha = 1;
+
+        // 3. FLOOR
+        const floorImg = assets['floor.png'];
+        if (floorImg && floorImg.complete) {
             for (let i = 0; i < (canvas.width / 50) + 2; i++) {
-                ctx.drawImage(assets['floor.png'], (-(frame * 6) % 50) + (i * 50), canvas.height - GROUND_HEIGHT, 50, GROUND_HEIGHT);
+                ctx.drawImage(floorImg, (-(frame * 6) % 50) + (i * 50), canvas.height - GROUND_HEIGHT, 50, GROUND_HEIGHT);
             }
         }
 
-        // Jump Physics
+        // 4. PHYSICS & OBJECTS
+        if (frame % 120 === 0) gameObjects.push(new GameObject(Math.random() > 0.4 ? 'snack' : 'obstacle'));
         if (jumpCount > 0) {
-            jumpHeight -= yVelocity;
-            yVelocity += 1.2;
+            jumpHeight -= yVelocity; yVelocity += 1.2;
             if (jumpHeight <= 0) { jumpHeight = 0; jumpCount = 0; }
         }
+        gameObjects.forEach((obj, i) => {
+            obj.update();
+            if (obj.x < -100) gameObjects.splice(i, 1);
+        });
+        document.getElementById('scoreDisplay').innerText = `SCORE: ${score}`;
     }
 
+    // 5. THE TEAM
     lori.draw(); azul.draw(); mochkil.draw();
+
+    if (gameState === 'GAMEOVER') {
+        ctx.fillStyle = "rgba(0,0,0,0.8)";
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle = "#0ff";
+        ctx.textAlign = "center";
+        ctx.font = "24px Courier";
+        ctx.fillText("CONNECTION LOST", canvas.width/2, canvas.height/2);
+        ctx.font = "16px Courier";
+        ctx.fillText("TAP TO REBOOT", canvas.width/2, canvas.height/2 + 40);
+    }
+
     requestAnimationFrame(animate);
 }
 
-function jump() {
-    if (gameState === 'PLAYING' && jumpCount < 2) {
-        yVelocity = -18;
-        jumpCount++;
+function handleInput() {
+    if (gameState === 'GAMEOVER') {
+        gameState = 'PLAYING'; score = 0; frame = 0; gameObjects = []; hasQuantumShield = true;
+    } else if (gameState === 'PLAYING' && jumpCount < 2) {
+        yVelocity = -18; jumpCount++;
     }
 }
 
-window.addEventListener('mousedown', jump);
-window.addEventListener('touchstart', (e) => { e.preventDefault(); jump(); });
+window.addEventListener('mousedown', handleInput);
+window.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(); });
 window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
 
 canvas.width = window.innerWidth;
