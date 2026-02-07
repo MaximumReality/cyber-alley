@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Maximum Reality: Cyber Alley</title>
+    <style>
+        body { 
+            margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', Courier, monospace;
+            position: fixed; width: 100%; height: 100%;
+            -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+        }
+        .game-controls { position: absolute; top: 20px; right: 20px; display: flex; gap: 15px; z-index: 100; }
+        .game-controls button {
+            background: rgba(0, 255, 255, 0.05); border: 1px solid rgba(0, 255, 255, 0.3);
+            color: #0ff; padding: 5px 10px; font-size: 16px; border-radius: 3px; backdrop-filter: blur(2px);
+        }
+        #gameCanvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; touch-action: none; }
+        .ui-layer {
+            position: absolute; top: 0; width: 100%; text-align: left; color: #0ff; 
+            text-shadow: 0 0 10px #0ff; pointer-events: none; padding-top: env(safe-area-inset-top); 
+            padding-left: 20px; z-index: 5;
+        }
+        #recentMenu { margin-top: 70px; display: flex; justify-content: center; gap: 10px; height: 40px; }
+        #recentMenu img { width: 40px; height: 40px; background: rgba(0,255,255,0.1); border-radius: 5px; border: 1px solid #0ff; }
+        .crt-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 4px, 3px 100%; pointer-events: none; z-index: 10;
+        }
+        #loader-container {
+            position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%);
+            width: 250px; height: 10px; border: 1px solid #0ff; padding: 2px; z-index: 100;
+        }
+        #loader-bar { width: 0%; height: 100%; background: #0ff; box-shadow: 0 0 15px #0ff; transition: width 0.2s ease-out; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <audio id="bgMusic" loop>
+        <source src="https://maximumreality.github.io/cyber-alley/futuristic-cyberpunk-industrial-music.mp3" type="audio/mpeg">
+    </audio>
+    <div class="crt-overlay"></div>
+    <div class="ui-layer">
+        <div id="scoreDisplay">SCORE: 0</div>
+        <div id="status">LOADING ASSETS...</div>
+        <div id="recentMenu"></div>
+    </div>
+    <div class="game-controls">
+        <button onclick="window.location.href='https://maximumreality.xyz'" title="Home">🏠</button>
+        <button id="muteBtn" onclick="toggleMute()" title="Mute">🔊</button>
+        <button id="pauseBtn" onclick="togglePause()" title="Pause">⏸️</button>
+    </div>
+    <div id="loader-container"><div id="loader-bar"></div></div>
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+// --- CORE SETUP ---
+let isPaused = false;
+let isMuted = false;
+const music = document.getElementById('bgMusic');
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
+
+// --- LOADING LOGIC ---
+let assetsLoaded = 0;
+let totalAssets = 0;
+const assets = {}; 
+
+function assetLoaded() {
+    assetsLoaded++;
+    const progress = (assetsLoaded / totalAssets) * 100;
+    const bar = document.getElementById('loader-bar');
+    if (bar) bar.style.width = progress + "%";
+    
+    if (assetsLoaded >= totalAssets) {
+        document.getElementById('status').innerText = "SYSTEM ONLINE: TAP TO START";
+        const loader = document.getElementById('loader-container');
+        if (loader) loader.classList.add('hidden');
+    }
+}
+
+// --- STARS (The "Old" Logic you liked) ---
+const stars = Array.from({ length: 100 }, () => ({
+    x: Math.random() * 2000,
+    y: Math.random() * (window.innerHeight * 0.6), // Keeps them in the top 60% of screen
+    size: Math.random() * 2,
+    speed: 0.05 + Math.random() * 0.1,
+    opacity: Math.random()
+}));
+
+// --- GAME CONSTANTS ---
+const biomes = {
+    night: { bg: 'gg-bg.png', buildings: ['building-a.png', 'building-b.png', 'building-c.png'], overlay: "#1a0033" },
+    day: { bg: 'gg-bg.png', buildings: ['building-d.png', 'building-e.png', 'building-f.png'], overlay: "#4b0082" }
+};
+
+const CHAR_SIZE = 100;
+const GROUND_Y_POS = 120; 
+const gravity = 1.2;
+
+// --- STATE VARIABLES ---
+let currentBiome = 'night';
+let gameState = 'START'; 
+let score = 0;
+let baseSpeed = 6;
+let gameSpeed = 0; 
+let frame = 0;
+let portalFrame = 0;
+let isTransitioning = false; 
+let isJumping = false;
+let jumpHeight = 0;
+let yVelocity = 0;
+let jumpCount = 0;
+let hasQuantumShield = true;
+let snackStreak = 0;
+let recentSnacks = [];
+let gameObjects = [];
+let shake = 0;
+let particles = [];
+
+const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 'fish-bones.png', 'smashed-can.png', 'smashed-juice-box.png', 'smashed-soda-can.png', 'detergent.png', 'receipt.png', 'scrub_brush.png', 'toilet_paper.png', 'hand_sanitiser.png', 'kitchen_soap.png', 'frying-pan.png', 'basket_metal.png'];
+const snackPool = ['credit_card_1.png', 'swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png', 'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 'fried-egg.png', 'green_apple.png', 'hotdog.png', 'marshmallows.png', 'milk_chocolate.png', 'pancake_stack.png', 'popcorn.png', 'red_apple.png', 'sandwich.png', 'strawberry-candy.png', 'watermelon-slice.png', 'tuna_can.png', 'ketchup.png', 'soft_drink_blue.png', 'milk_gallon.png', 'orange_juice.png'];
+const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'building-d.png', 'building-e.png', 'building-f.png', 'floor.png', 'snack-portal.png'];
+
+class Player {
+    constructor(name, x, sprites, w, h) {
+        this.name = name; this.x = x; this.w = w; this.h = h;
+        this.spriteFiles = sprites;
+        this.frameIndex = 0;
+    }
+    draw() {
+        if (this.name !== 'mochkil' || this.frameIndex !== 0) {
+            if (frame % 8 === 0) this.frameIndex = (this.frameIndex + 1) % this.spriteFiles.length;
+        }
+        const drawY = canvas.height - GROUND_Y_POS - CHAR_SIZE - (this.name !== 'mochkil' ? jumpHeight : 0);
+        const img = assets[this.spriteFiles[this.frameIndex]];
+        if (img && img.complete) {
+            ctx.save();
+            if (this.name === 'azul' && hasQuantumShield) { ctx.shadowBlur = 15; ctx.shadowColor = "#0ff"; }
+            ctx.drawImage(img, this.x, drawY, CHAR_SIZE, CHAR_SIZE); 
+            ctx.restore();
+        }
+    }
+}
+
+const lori = new Player("lori", 50, ['Lori-run.png', 'Lori-run2.png', 'Lori-run3.png'], 90, 120);
+const azul = new Player("azul", 160, ['Azul-run.png', 'Azul-run2.png', 'Azul-run3.png'], 65, 65);
+const mochkil = new Player("mochkil", 250, ['Mochkil.png', 'Mochkil2.png'], 75, 75);
+
+// Correctly count and load everything
+const allSprites = [...toLoad, ...lori.spriteFiles, ...azul.spriteFiles, ...mochkil.spriteFiles];
+totalAssets = allSprites.length;
+allSprites.forEach(src => {
+    assets[src] = new Image();
+    assets[src].onload = assetLoaded;
+    assets[src].src = BASE_URL + src;
+});
+
+class GameObject {
+    constructor(type) {
+        this.type = type;
+        const pool = type === 'obstacle' ? obstaclePool : snackPool;
+        this.file = pool[Math.floor(Math.random() * pool.length)];
+        this.img = new Image();
+        this.img.src = BASE_URL + this.file;
+        this.x = canvas.width + 100;
+        this.collected = false;
+        this.w = this.file.includes('truck') ? 180 : 55;
+        this.h = this.file.includes('truck') ? 100 : 55;
+        this.y = canvas.height - GROUND_Y_POS - this.h;
+        if (type === 'snack') this.y -= (Math.random() > 0.5 ? 0 : 160);
+    }
+    update() {
+        this.x -= gameSpeed;
+        const loriJumpY = canvas.height - GROUND_Y_POS - CHAR_SIZE - jumpHeight;
+        
+        if (!this.collected) {
+            const players = [
+                {p: lori, y: loriJumpY},
+                {p: azul, y: loriJumpY},
+                {p: mochkil, y: canvas.height - GROUND_Y_POS - CHAR_SIZE}
+            ];
+            players.forEach((char, i) => {
+                if (char.p.x < this.x + this.w && char.p.x + CHAR_SIZE > this.x && char.y < this.y + this.h && char.y + CHAR_SIZE > this.y) {
+                    if (this.type === 'obstacle' && i === 0) {
+                        if (hasQuantumShield) { hasQuantumShield = false; this.collected = true; shake = 15; document.getElementById('status').innerText = "SHIELD BROKEN!"; }
+                        else { gameState = 'GAMEOVER'; music.pause(); }
+                    } else if (this.type === 'snack') {
+                        this.collected = true;
+                        if (this.file.includes('portal')) handlePortalEntry();
+                        else {
+                            score += 150; updateMenu(this.file);
+                            if (!hasQuantumShield) { snackStreak++; if (snackStreak >= 5) { hasQuantumShield = true; snackStreak = 0; } }
+                            mochkil.frameIndex = 1; setTimeout(() => { mochkil.frameIndex = 0; }, 300);
+                        }
+                    }
+                }
+            });
+        }
+        if (this.img.complete && !this.collected) ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
+    }
+}
+
+function drawBackground() {
+    ctx.fillStyle = biomes[currentBiome].overlay;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // DRAW STARS (Behind everything)
+    stars.forEach(s => {
+        let twinkle = s.opacity * Math.abs(Math.sin(frame / 30 + s.x));
+        ctx.globalAlpha = twinkle;
+        let starX = (s.x - (frame * s.speed)) % canvas.width;
+        if (starX < 0) starX += canvas.width;
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(starX, s.y, s.size, s.size);
+    });
+
+    const b = biomes[currentBiome];
+    const layers = [
+        { src: b.bg, s: 0.2, op: 0.3, h: canvas.height }, 
+        { src: b.buildings[2], s: 0.8, op: 0.5, h: canvas.height * 0.8 }, 
+        { src: b.buildings[1], s: 1.5, op: 0.7, h: canvas.height * 0.6 }, 
+        { src: b.buildings[0], s: 2.5, op: 0.9, h: canvas.height * 0.4 }
+    ];
+    layers.forEach(l => {
+        if (assets[l.src] && assets[l.src].complete) {
+            let xPos = -(frame * l.s) % canvas.width;
+            ctx.globalAlpha = l.op;
+            ctx.drawImage(assets[l.src], xPos, canvas.height - l.h - GROUND_Y_POS, canvas.width, l.h);
+            ctx.drawImage(assets[l.src], xPos + canvas.width, canvas.height - l.h - GROUND_Y_POS, canvas.width, l.h);
+        }
+    });
+    ctx.globalAlpha = 1;
+    if (assets['floor.png'] && assets['floor.png'].complete) {
+        for (let i = 0; i < (canvas.width / 50) + 2; i++) {
+            ctx.drawImage(assets['floor.png'], (-(frame * gameSpeed) % 50) + (i * 50), canvas.height - GROUND_Y_POS, 50, 120);
+        }
+    }
+}
+
+// ... (Keep your toggleMute, togglePause, resize, handlePortalEntry, resetGame, handleJump, updateMenu functions exactly as they were)
+
+function animate() {
+    if (isPaused) { requestAnimationFrame(animate); return; }
+    ctx.save();
+    if (shake > 0) { ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake); shake *= 0.9; }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawBackground();
+    
+    if (gameState === 'PLAYING') {
+        frame++;
+        if (frame % 80 === 0) gameObjects.push(new GameObject(Math.random() > 0.4 ? 'obstacle' : 'snack'));
+        if (isJumping) { jumpHeight -= yVelocity; yVelocity += gravity; if (jumpHeight <= 0) { jumpHeight = 0; isJumping = false; jumpCount = 0; } }
+        gameObjects.forEach((obj, i) => { obj.update(); if (obj.x < -300) gameObjects.splice(i, 1); });
+        document.getElementById('scoreDisplay').innerText = `SCORE: ${score}`;
+    }
+    lori.draw(); azul.draw(); mochkil.draw();
+    ctx.restore();
+    
+    if (gameState !== 'PLAYING') {
+        ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle = "#0ff"; ctx.textAlign = "center"; ctx.font = "24px Courier";
+        ctx.fillText(gameState === 'START' ? "MAXIMUM REALITY" : "CONNECTION LOST", canvas.width/2, canvas.height/2);
+    }
+    requestAnimationFrame(animate);
+}
+animate();
+
+</script>
+</body>
+</html>
