@@ -63,10 +63,18 @@
 
         #gameCanvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; touch-action: none; }
         .ui-layer {
-            position: absolute; top: 0; width: 100%; text-align: center;
-            color: #0ff; text-shadow: 0 0 10px #0ff; pointer-events: none;
-            padding-top: env(safe-area-inset-top); z-index: 5;
-        }
+    position: absolute; 
+    top: 0; 
+    width: 100%; 
+    text-align: left; /* Shift text away from buttons */
+    color: #0ff; 
+    text-shadow: 0 0 10px #0ff; 
+    pointer-events: none;
+    padding-top: env(safe-area-inset-top); 
+    padding-left: 20px; /* Give it some breathing room */
+    z-index: 5;
+}
+
         #recentMenu { margin-top: 10px; display: flex; justify-content: center; gap: 10px; height: 40px; }
         #recentMenu img { width: 40px; height: 40px; background: rgba(0,255,255,0.1); border-radius: 5px; border: 1px solid #0ff; }
         .crt-overlay {
