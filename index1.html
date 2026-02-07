@@ -24,6 +24,16 @@
                         linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
             background-size: 100% 4px, 3px 100%; pointer-events: none; z-index: 10;
         }
+        @keyframes glitch-glow {
+    0% { text-shadow: 0 0 5px #0ff; }
+    50% { text-shadow: 0 0 20px #0ff, 0 0 30px #0ff; color: #fff; }
+    100% { text-shadow: 0 0 5px #0ff; }
+}
+
+.shield-ready {
+    animation: glitch-glow 0.5s ease-in-out 3;
+}
+
     </style>
 </head>
 <body>
@@ -153,6 +163,18 @@ if (!this.collected && this.type === 'snack') {
             this.collected = true; 
             score += 150; 
             updateMenu(this.file);
+            if (snackStreak >= 5) {
+    hasQuantumShield = true;
+    snackStreak = 0;
+    const statusEl = document.getElementById('status');
+    statusEl.innerText = "QUANTUM SHIELD RESTORED";
+    
+    // Trigger the animation
+    statusEl.classList.remove('shield-ready');
+    void statusEl.offsetWidth; // Trigger a reflow to restart animation
+    statusEl.classList.add('shield-ready');
+}
+
             
             // REGEN LOGIC
             if (!hasQuantumShield) {
