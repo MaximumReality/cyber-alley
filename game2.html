@@ -51,138 +51,252 @@
     <canvas id="gameCanvas"></canvas>
 
 <script>
+let isPaused = false;
+let isMuted = false;
+
+function toggleMute() {
+    isMuted = !isMuted;
+    music.muted = isMuted;
+    document.getElementById('muteBtn').innerText = isMuted ? "🔇" : "🔊";
+}
+
+function togglePause() {
+    if (gameState !== 'PLAYING') return;
+    isPaused = !isPaused;
+    document.getElementById('pauseBtn').innerText = isPaused ? "▶️" : "⏸️";
+    if (isPaused) music.pause(); else music.play().catch(() => {});
+}
+
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
+
+const biomes = {
+    night: { bg: 'gg-bg.png', buildings: ['building-a.png', 'building-b.png', 'building-c.png'], overlay: "rgba(43, 0, 43, 1)" },
+    day: { bg: 'gg-bg.png', buildings: ['building-d.png', 'building-e.png', 'building-f.png'], overlay: "rgba(135, 206, 235, 1)" }
+};
+
+const CHAR_SIZE = 100;
+const GROUND_Y_POS = 120; 
+const gravity = 1.2;
 const music = document.getElementById('bgMusic');
 
-// --- ASSET POOLS ---
-const snackPool = ['credit_card_1.png', 'swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png', 'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 'fried-egg.png', 'green_apple.png', 'hotdog.png', 'marshmallows.png', 'milk_chocolate.png', 'pancake_stack.png', 'popcorn.png', 'red_apple.png', 'sandwich.png', 'strawberry-candy.png', 'watermelon-slice.png', 'tuna_can.png', 'ketchup.png', 'soft_drink_blue.png', 'milk_gallon.png', 'orange_juice.png'];
-const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 'fish-bones.png'];
-const allAssets = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'floor.png', 'Lori-run.png', 'Lori-run2.png', 'Lori-run3.png', 'Azul-run.png', 'Azul-run2.png', 'Azul-run3.png', 'Mochkil.png', 'Mochkil2.png', ...snackPool, ...obstaclePool];
+let currentBiome = 'night';
+let gameState = 'START'; 
+let score = 0;
+let baseSpeed = 6;
+let gameSpeed = 0; 
+let frame = 0;
+let portalFrame = 0;
+let isTransitioning = false; 
+let isJumping = false;
+let jumpHeight = 0;
+let yVelocity = 0;
+let jumpCount = 0;
+let hasQuantumShield = true;
+let snackStreak = 0;
+let recentSnacks = [];
+let gameObjects = [];
+let shake = 0;
+let particles = [];
 
-const GROUND_HEIGHT = 100, assets = {};
-let gameState = 'LOADING', score = 0, frame = 0, jumpHeight = 0, yVelocity = 0, jumpCount = 0;
-let hasShield = true, snackStreak = 0, gameObjects = [];
-const stars = Array.from({ length: 60 }, () => ({ x: Math.random() * 2000, y: Math.random() * 400, size: Math.random() * 2, op: Math.random() }));
+const stars = Array.from({ length: 80 }, () => ({
+    x: Math.random() * 2000,
+    y: Math.random() * 400,
+    size: Math.random() * 2,
+    opacity: Math.random()
+}));
 
-function load() {
-    let loaded = 0;
-    allAssets.forEach(file => {
-        const img = new Image();
-        img.onload = () => { if (++loaded >= allAssets.length) showBtn(); };
-        img.onerror = () => { if (++loaded >= allAssets.length) showBtn(); };
-        img.src = BASE_URL + file;
-        assets[file] = img;
-    });
-    setTimeout(showBtn, 4000);
+const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 'fish-bones.png', 'smashed-can.png', 'smashed-juice-box.png', 'smashed-soda-can.png', 'detergent.png', 'receipt.png', 'scrub_brush.png', 'toilet_paper.png', 'hand_sanitiser.png', 'kitchen_soap.png', 'frying-pan.png'];
+const snackPool = ['credit_card_1.png', 'swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png', 'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 'fried-egg.png', 'green_apple.png', 'hotdog.png', 'marshmallows.png', 'milk_chocolate.png', 'pancake_stack.png', 'popcorn.png', 'red_apple.png', 'sandwich.png', 'strawberry-candy.png', 'watermelon-slice.png', 'tuna_can.png'];
+
+const assets = {};
+const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'building-d.png', 'building-e.png', 'building-f.png', 'floor.png', 'snack-portal.png'];
+toLoad.forEach(src => { assets[src] = new Image(); assets[src].src = BASE_URL + src; });
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize);
+resize();
+
+function updateMenu(file) {
+    const menu = document.getElementById('recentMenu');
+    recentSnacks.unshift(file);
+    if(recentSnacks.length > 5) recentSnacks.pop();
+    menu.innerHTML = recentSnacks.map(f => `<img src="${BASE_URL + f}">`).join('');
 }
-function showBtn() { document.getElementById('start-btn').style.display = 'block'; document.getElementById('loader-text').innerText = "READY"; }
 
 class Player {
-    constructor(name, x, sprites, w, h) { this.name = name; this.x = x; this.sprites = sprites; this.w = w; this.h = h; this.f = 0; }
+    constructor(name, x, sprites) {
+        this.name = name; this.x = x;
+        this.sprites = sprites.map(file => { const img = new Image(); img.src = BASE_URL + file; return img; });
+        this.frameIndex = 0;
+    }
     draw() {
-        if (this.name !== 'mochkil') { if (frame % 8 === 0) this.f = (this.f + 1) % this.sprites.length; }
-        const dy = canvas.height - GROUND_HEIGHT - this.h - (this.name !== 'mochkil' ? jumpHeight : 0);
-        const img = assets[this.sprites[this.f]];
-        if (img && img.complete) {
+        if (this.name !== 'mochkil' || this.frameIndex !== 0) {
+            if (frame % 8 === 0) this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
+        }
+        const drawY = canvas.height - GROUND_Y_POS - CHAR_SIZE - (this.name !== 'mochkil' ? jumpHeight : 0);
+        if (this.sprites[this.frameIndex].complete) {
             ctx.save();
-            if (this.name === 'azul' && hasShield) { ctx.shadowBlur = 15; ctx.shadowColor = "#0ff"; }
-            ctx.drawImage(img, this.x, dy, this.w, this.h);
+            if (this.name === 'azul' && hasQuantumShield) { ctx.shadowBlur = 20; ctx.shadowColor = "#0ff"; }
+            ctx.drawImage(this.sprites[this.frameIndex], this.x, drawY, CHAR_SIZE, CHAR_SIZE); 
             ctx.restore();
         }
     }
 }
 
-const lori = new Player("lori", 50, ['Lori-run.png', 'Lori-run2.png', 'Lori-run3.png'], 85, 115);
-const azul = new Player("azul", 150, ['Azul-run.png', 'Azul-run2.png', 'Azul-run3.png'], 60, 60);
-const mochkil = new Player("mochkil", 240, ['Mochkil.png', 'Mochkil2.png'], 75, 75);
+// --- NEW SPRITES INITIALIZED HERE ---
+const lori = new Player("lori", 50, ['Lori-run.png', 'Lori-run2.png', 'Lori-run3.png']);
+const azul = new Player("azul", 140, ['Azul-run.png', 'Azul-run2.png', 'Azul-run3.png']);
+const mochkil = new Player("mochkil", 230, ['Mochkil.png', 'Mochkil2.png']);
 
 class GameObject {
     constructor(type) {
         this.type = type;
-        const p = type === 'snack' ? snackPool : obstaclePool;
-        this.file = p[Math.floor(Math.random() * p.length)];
-        this.x = canvas.width + 100;
-        this.w = this.file.includes('truck') ? 160 : 55;
-        this.h = this.file.includes('truck') ? 90 : 55;
-        this.y = canvas.height - GROUND_HEIGHT - this.h;
-        if (type === 'snack' && Math.random() > 0.5) this.y -= 150;
-        this.done = false;
+        const pool = type === 'obstacle' ? obstaclePool : snackPool;
+        this.file = pool[Math.floor(Math.random() * pool.length)];
+        this.img = new Image(); this.img.src = BASE_URL + this.file;
+        this.x = canvas.width + 100; this.collected = false;
+        if (this.file.includes('snack-portal')) { this.w = 150; this.h = 200; }
+        else if (this.file.includes('truck')) { this.w = 180; this.h = 100; }
+        else if (this.file.includes('dumpster')) { this.w = 120; this.h = 90; }
+        else { this.w = 50; this.h = 50; }
+        this.y = canvas.height - GROUND_Y_POS - this.h;
+        if (type === 'snack' && !this.file.includes('portal')) { this.y -= (Math.random() > 0.5 ? 0 : 160); }
     }
     update() {
-        this.x -= 7;
-        const img = assets[this.file];
-        if (!img || this.done) return;
-        ctx.drawImage(img, this.x, this.y, this.w, this.h);
+        this.x -= gameSpeed;
+        const loriJumpY = canvas.height - GROUND_Y_POS - CHAR_SIZE - jumpHeight;
+        if (!this.collected && this.type === 'obstacle') {
+            const loriHitX = lori.x + 35;
+            if (loriHitX < this.x + this.w - 15 && loriHitX + 30 > this.x + 15 && loriJumpY + 85 > this.y + 10 && loriJumpY + 15 < this.y + this.h) {
+                if (hasQuantumShield) { hasQuantumShield = false; snackStreak = 0; this.collected = true; shake = 20; document.getElementById('status').innerText = "SHIELD BROKEN!"; }
+                else { gameState = 'GAMEOVER'; music.pause(); }
+            }
+        }
+        if (!this.collected && this.type === 'snack') {
+            const targets = [{x: lori.x, y: loriJumpY}, {x: azul.x, y: loriJumpY}, {x: mochkil.x, y: canvas.height - GROUND_Y_POS - CHAR_SIZE}];
+            targets.forEach(t => {
+                if (t.x < this.x + this.w && t.x + 80 > this.x && t.y < this.y + this.h && t.y + 80 > this.y) {
+                    this.collected = true; 
+                    let sparkColor = this.file.includes('credit_card_1') ? '#ffd700' : '#00ffff';
+                    createBurst(this.x, this.y, sparkColor); 
+                    if (this.file.includes('credit_card_1')) {
+                        score += 500; document.getElementById('status').innerText = "CREDIT INCREASED +500";
+                    } else if (this.file.includes('snack-portal')) {
+                        handlePortalEntry();
+                    } else {
+                        score += 150; updateMenu(this.file);
+                        if (!hasQuantumShield) {
+                            snackStreak++; document.getElementById('status').innerText = `REBOOTING: ${snackStreak}/5`;
+                            if (snackStreak >= 5) { hasQuantumShield = true; snackStreak = 0; document.getElementById('status').innerText = "SHIELD RESTORED"; }
+                        }
+                    }
+                    mochkil.frameIndex = 1; setTimeout(() => { if(gameState==='PLAYING') mochkil.frameIndex = 0; }, 600);
+                }
+            });
+        }
+        if (this.img.complete && !this.collected) ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
+    }
+}
 
-        const ly = canvas.height - GROUND_HEIGHT - lori.h - jumpHeight;
-        // Lori/Azul Collision
-        if (this.x < 180 && this.x + this.w > 50 && this.y < ly + lori.h && this.y + this.h > ly) {
-            if (this.type === 'snack') this.collect(); else this.hit();
+function handlePortalEntry() {
+    if (isTransitioning) return;
+    isTransitioning = true; shake = 50; currentBiome = 'day'; portalFrame = frame;
+    score += 500; gameObjects = []; baseSpeed = 9; gameSpeed = baseSpeed;
+    document.getElementById('status').innerText = "SECTOR 2: THE BRIGHT SIDE";
+    setTimeout(() => { isTransitioning = false; }, 2000);
+}
+
+function resetGame() {
+    score = 0; snackStreak = 0; gameObjects = []; baseSpeed = 6; gameSpeed = baseSpeed;
+    currentBiome = 'night'; isTransitioning = false; frame = 0; gameState = 'PLAYING'; 
+    recentSnacks = []; jumpCount = 0; jumpHeight = 0; hasQuantumShield = true;
+    music.play().catch(() => {}); document.getElementById('recentMenu').innerHTML = '';
+}
+
+function handleJump() {
+    if (gameState !== 'PLAYING') resetGame();
+    else if (jumpCount < 2) { isJumping = true; yVelocity = -20; jumpCount++; }
+}
+
+window.addEventListener('mousedown', handleJump);
+window.addEventListener('touchstart', (e) => { if (e.target.id === 'gameCanvas') { e.preventDefault(); handleJump(); } }, { passive: false });
+
+function drawBackground() {
+    ctx.fillStyle = biomes[currentBiome].overlay; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#fff";
+    stars.forEach(s => {
+        let twinkle = s.opacity * Math.abs(Math.sin(frame / 30 + s.x));
+        ctx.globalAlpha = twinkle;
+        let starX = (s.x - (frame * 0.1)) % canvas.width;
+        if (starX < 0) starX += canvas.width;
+        ctx.fillRect(starX, s.y, s.size, s.size);
+    });
+    ctx.globalAlpha = 1;
+    const b = biomes[currentBiome];
+    const layers = [{ src: b.bg, s: 0.2, op: 0.3, h: canvas.height }, { src: b.buildings[2], s: 0.8, op: 0.5, h: canvas.height * 0.8 }, { src: b.buildings[1], s: 1.5, op: 0.7, h: canvas.height * 0.6 }, { src: b.buildings[0], s: 2.5, op: 0.9, h: canvas.height * 0.4 }];
+    layers.forEach(l => {
+        if (assets[l.src] && assets[l.src].complete) {
+            let xPos = -(frame * l.s) % canvas.width;
+            ctx.globalAlpha = l.op;
+            ctx.drawImage(assets[l.src], xPos, canvas.height - l.h - GROUND_Y_POS, canvas.width, l.h);
+            ctx.drawImage(assets[l.src], xPos + canvas.width, canvas.height - l.h - GROUND_Y_POS, canvas.width, l.h);
         }
-        // Mochkil Collision (INVINCIBLE to obstacles)
-        if (this.type === 'snack' && this.x < 310 && this.x + this.w > 240) {
-            const my = canvas.height - GROUND_HEIGHT - mochkil.h;
-            if (this.y < my + mochkil.h && this.y + this.h > my) this.collect();
+    });
+    ctx.globalAlpha = 1;
+    if (assets['floor.png'] && assets['floor.png'].complete) {
+        for (let i = 0; i < (canvas.width / 50) + 2; i++) {
+            ctx.drawImage(assets['floor.png'], (-(frame * gameSpeed) % 50) + (i * 50), canvas.height - GROUND_Y_POS, 50, 100);
         }
     }
-    collect() {
-        this.done = true; score += 150; snackStreak++;
-        document.getElementById('snack-bar').style.width = (snackStreak / 5 * 100) + "%";
-        if (snackStreak >= 5 && !hasShield) { hasShield = true; snackStreak = 0; document.getElementById('shield-bar').style.width = "100%"; }
-        mochkil.f = 1; setTimeout(() => mochkil.f = 0, 300);
-    }
-    hit() {
-        if (hasShield) { hasShield = false; this.done = true; document.getElementById('shield-bar').style.width = "0%"; }
-        else { gameState = 'GAMEOVER'; music.pause(); }
+}
+
+function createBurst(x, y, color) {
+    for (let i = 0; i < 12; i++) {
+        particles.push({ x: x, y: y, vX: (Math.random() - 0.5) * 12, vY: (Math.random() - 0.5) * 12, life: 1.0, color: color });
     }
 }
 
 function animate() {
+    if (isPaused) { requestAnimationFrame(animate); return; }
+    ctx.save();
+    if (shake > 0) { ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake); shake *= 0.9; if (shake < 0.5) shake = 0; }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#1a0033"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    stars.forEach(s => {
-        let sx = (s.x - (frame * 0.1)) % canvas.width;
-        if (sx < 0) sx += canvas.width;
-        ctx.globalAlpha = s.op; ctx.fillStyle = "#fff"; ctx.fillRect(sx, s.y, s.size, s.size);
+    drawBackground();
+    particles.forEach((p, i) => {
+        p.x += p.vX; p.y += p.vY; p.life -= 0.02;
+        ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 4, 4);
+        if (p.life <= 0) particles.splice(i, 1);
     });
     ctx.globalAlpha = 1;
-
     if (gameState === 'PLAYING') {
         frame++;
-        ['building-c.png', 'building-b.png', 'building-a.png'].forEach((src, i) => {
-            const img = assets[src]; if (img) {
-                let xp = -(frame * (0.5 + i * 0.5)) % canvas.width;
-                ctx.globalAlpha = 0.4 + (i * 0.2); ctx.drawImage(img, xp, canvas.height-GROUND_HEIGHT-400, canvas.width, 400);
-                ctx.drawImage(img, xp + canvas.width, canvas.height-GROUND_HEIGHT-400, canvas.width, 400);
-            }
-        });
-        ctx.globalAlpha = 1;
-        const fi = assets['floor.png']; if (fi) for (let i=0; i<(canvas.width/50)+2; i++) ctx.drawImage(fi, (-(frame*7)%50)+(i*50), canvas.height-GROUND_HEIGHT, 50, GROUND_HEIGHT);
-        if (frame % 100 === 0) gameObjects.push(new GameObject(Math.random() > 0.4 ? 'snack' : 'obstacle'));
-        if (jumpCount > 0) { jumpHeight -= yVelocity; yVelocity += 1.2; if (jumpHeight <= 0) { jumpHeight = 0; jumpCount = 0; } }
-        gameObjects.forEach((o, i) => { o.update(); if (o.x < -200) gameObjects.splice(i, 1); });
+        const portalExists = gameObjects.some(obj => obj.file.includes('snack-portal'));
+        if (score >= 2000 && currentBiome === 'night' && !portalExists && !isTransitioning) {
+            let portal = new GameObject('snack'); portal.file = 'snack-portal.png'; portal.img.src = BASE_URL + portal.file; gameObjects.push(portal);
+        }
+        if (frame % 80 === 0 && !portalExists) { gameObjects.push(new GameObject(Math.random() > 0.4 ? 'obstacle' : 'snack')); }
+        if (isJumping) { jumpHeight -= yVelocity; yVelocity += gravity; if (jumpHeight <= 0) { jumpHeight = 0; isJumping = false; jumpCount = 0; } }
+        gameObjects.forEach((obj, i) => { obj.update(); if (obj.x < -300) gameObjects.splice(i, 1); });
         document.getElementById('scoreDisplay').innerText = `SCORE: ${score}`;
     }
     lori.draw(); azul.draw(); mochkil.draw();
-    if (gameState === 'GAMEOVER') {
+    if (isTransitioning) {
+        let alpha = 1 - (frame - portalFrame) / 60;
+        if (alpha > 0) { ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+    }
+    ctx.restore();
+    if (gameState !== 'PLAYING') {
         ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0,0,canvas.width,canvas.height);
-        ctx.fillStyle = "#0ff"; ctx.textAlign = "center"; ctx.font = "24px Courier"; ctx.fillText("CONNECTION LOST", canvas.width/2, canvas.height/2);
+        ctx.fillStyle = "#0ff"; ctx.textAlign = "center"; ctx.font = "24px Courier";
+        ctx.fillText(gameState === 'START' ? "MAXIMUM REALITY" : "CONNECTION LOST", canvas.width/2, canvas.height/2 - 20);
+        ctx.fillText("TAP TO CONNECT", canvas.width/2, canvas.height/2 + 20);
     }
     requestAnimationFrame(animate);
 }
-
-function startGame() { document.getElementById('overlay-screen').classList.add('hidden'); gameState = 'PLAYING'; music.play(); }
-function toggleMute() { music.muted = !music.muted; document.getElementById('muteBtn').innerText = music.muted ? "🔇" : "🔊"; }
-function togglePause() { if (gameState === 'PLAYING') { gameState = 'PAUSED'; music.pause(); } else if (gameState === 'PAUSED') { gameState = 'PLAYING'; music.play(); } }
-function handleInput() { if (gameState === 'GAMEOVER') location.reload(); else if (jumpCount < 2) { yVelocity = -18; jumpCount++; } }
-
-window.addEventListener('mousedown', handleInput);
-window.addEventListener('touchstart', (e) => { if (gameState !== 'LOADING' && e.target.tagName !== 'BUTTON') { e.preventDefault(); handleInput(); } }, {passive: false});
-window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
-canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-load(); animate();
+animate();
 </script>
+
 </body>
 </html>
