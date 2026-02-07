@@ -48,7 +48,8 @@
     </div>
     <canvas id="gameCanvas"></canvas>
 
-<script>const canvas = document.getElementById('gameCanvas');
+<script>
+    const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
 
@@ -64,6 +65,12 @@ const biomes = {
         overlay: "rgba(135, 206, 235, 1)"
     }
 };
+
+// --- CONFIG ---
+const CHAR_SIZE = 100;
+const GROUND_Y_POS = 120; 
+const gravity = 1.2;
+const music = document.getElementById('bgMusic');
 
 let currentBiome = 'night';
 let gameState = 'START'; 
@@ -83,13 +90,22 @@ let recentSnacks = [];
 let gameObjects = [];
 let shake = 0;
 
-const CHAR_SIZE = 100;
-const GROUND_Y_POS = 120; 
-const gravity = 1.2;
-const music = document.getElementById('bgMusic');
+// --- RESTORED FULL ASSET POOLS ---
+const obstaclePool = [
+    'dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 
+    'fish-bones.png', 'smashed-can.png', 'smashed-juice-box.png', 'smashed-soda-can.png',
+    'detergent.png', 'receipt.png', 'scrub_brush.png', 'toilet_paper.png', 
+    'hand_sanitiser.png', 'kitchen_soap.png', 'frying-pan.png'
+];
 
-const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 'fish-bones.png', 'smashed-can.png', 'smashed-juice-box.png', 'smashed-soda-can.png', 'detergent.png', 'receipt.png', 'scrub_brush.png', 'toilet_paper.png', 'hand_sanitiser.png', 'kitchen_soap.png', 'frying-pan.png'];
-const snackPool = ['swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png', 'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 'fried-egg.png', 'green_apple.png', 'hotdog.png', 'marshmallows.png', 'milk_chocolate.png', 'pancake_stack.png', 'popcorn.png', 'red_apple.png', 'sandwich.png', 'strawberry-candy.png', 'watermelon-slice.png', 'tuna_can.png'];
+const snackPool = [
+    'swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 
+    'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png',
+    'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 'fried-egg.png',
+    'green_apple.png', 'hotdog.png', 'marshmallows.png', 'milk_chocolate.png',
+    'pancake_stack.png', 'popcorn.png', 'red_apple.png', 'sandwich.png', 
+    'strawberry-candy.png', 'watermelon-slice.png', 'tuna_can.png'
+];
 
 const assets = {};
 const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'building-d.png', 'building-e.png', 'building-f.png', 'floor.png', 'snack-portal.png'];
@@ -138,8 +154,11 @@ class GameObject {
         this.img = new Image(); this.img.src = BASE_URL + this.file;
         this.x = canvas.width + 100; this.collected = false;
 
+        // --- RESTORED SPECIAL SIZING LOGIC ---
         if (this.file.includes('snack-portal')) { this.w = 150; this.h = 200; }
         else if (this.file.includes('truck')) { this.w = 180; this.h = 100; }
+        else if (this.file.includes('dumpster')) { this.w = 120; this.h = 90; }
+        else if (this.file.includes('smashed-can')) { this.w = 40; this.h = 40; }
         else { this.w = 50; this.h = 50; }
 
         this.y = canvas.height - GROUND_Y_POS - this.h;
@@ -172,7 +191,7 @@ class GameObject {
                         if (!hasQuantumShield) {
                             snackStreak++;
                             document.getElementById('status').innerText = `REBOOTING: ${snackStreak}/5`;
-                            if (snackStreak >= 5) { hasQuantumShield = true; snackStreak = 0; }
+                            if (snackStreak >= 5) { hasQuantumShield = true; snackStreak = 0; document.getElementById('status').innerText = "SHIELD RESTORED"; }
                         }
                     }
                     mochkil.frameIndex = 1; setTimeout(() => { if(gameState==='PLAYING') mochkil.frameIndex = 0; }, 600);
