@@ -88,103 +88,90 @@ const lori = new Player("lori", 50, ['Lori-run.png', 'Lori-run2.png', 'Lori-run3
 const azul = new Player("azul", 160, ['Azul-run.png', 'Azul-run2.png', 'Azul-run3.png'], 65, 65);
 const mochkil = new Player("mochkil", 250, ['Mochkil.png', 'Mochkil2.png'], 75, 75);
 
-class GameObject {
+classclass GameObject {
     constructor(type) {
         this.type = type;
         const pool = type === 'obstacle' ? obstaclePool : snackPool;
         this.file = pool[Math.floor(Math.random() * pool.length)];
-        this.img = new Image(); this.img.src = BASE_URL + this.file;
-        this.x = canvas.width + 100; this.collected = false;
+        this.img = new Image();
+        this.img.src = BASE_URL + this.file;
+        this.x = canvas.width + 100;
+        this.collected = false;
         this.w = this.file.includes('truck') ? 180 : 55;
         this.h = this.file.includes('truck') ? 100 : 55;
         this.y = canvas.height - GROUND_HEIGHT - this.h;
         if (type === 'snack') this.y -= (Math.random() > 0.5 ? 0 : 160);
     }
+
     update() {
         if (this.collected) return;
-        this.x -= 6;
+        
+        // GHOST GUARD: Only run collision if the image is actually loaded/visible
+        if (!this.img.complete || this.img.naturalWidth === 0) return;
+
+        this.x -= 6; // Movement speed
+
         const loriY = canvas.height - GROUND_HEIGHT - lori.h - jumpHeight;
         const team = [
-            {p: lori, y: loriY}, {p: azul, y: loriY}, 
+            {p: lori, y: loriY}, 
+            {p: azul, y: loriY}, 
             {p: mochkil, y: canvas.height - GROUND_HEIGHT - mochkil.h}
         ];
+
         team.forEach((char, i) => {
-            if (char.p.x < this.x + this.w && char.p.x + char.p.w > this.x && char.y < this.y + this.h && char.y + char.p.h > this.y) {
+            // Collision Logic
+            if (char.p.x < this.x + this.w && char.p.x + char.p.w > this.x && 
+                char.y < this.y + this.h && char.y + char.p.h > this.y) {
+                
                 if (this.type === 'obstacle' && i === 0) {
-                    if (hasQuantumShield) { hasQuantumShield = false; this.collected = true; document.getElementById('status').innerText = "SHIELD BROKEN!"; }
-                    else { gameState = 'GAMEOVER'; music.pause(); }
+                    if (hasQuantumShield) {
+                        hasQuantumShield = false;
+                        this.collected = true; // Remove the obstacle on hit
+                        document.getElementById('status').innerText = "SHIELD BROKEN!";
+                    } else {
+                        gameState = 'GAMEOVER';
+                    }
                 } else if (this.type === 'snack') {
-                    this.collected = true; score += 150; updateMenu(this.file);
-                    if (!hasQuantumShield) { snackStreak++; if (snackStreak >= 5) { hasQuantumShield = true; snackStreak = 0; document.getElementById('status').innerText = "SHIELD RESTORED"; } }
-                    mochkil.frameIndex = 1; setTimeout(() => { mochkil.frameIndex = 0; }, 300);
+                    this.collected = true;
+                    score += 150;
+                    updateMenu(this.file);
+                    if (!hasQuantumShield) {
+                        snackStreak++;
+                        if (snackStreak >= 5) {
+                            hasQuantumShield = true;
+                            snackStreak = 0;
+                            document.getElementById('status').innerText = "SHIELD RESTORED";
+                        }
+                    }
                 }
             }
         });
-        if (this.img.complete) ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
+
+        // Draw only if it exists
+        ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
     }
 }
 
-// --- ENGINE ---
-function load() {
-    const all = [...toLoad, ...lori.sprites, ...azul.sprites, ...mochkil.sprites];
-    all.forEach(src => {
-        assets[src] = new Image();
-        assets[src].onload = () => {
-            loadedCount++;
-            document.getElementById('loader-bar').style.width = (loadedCount / all.length * 100) + "%";
-            if (loadedCount === all.length) {
-                document.getElementById('start-btn').style.display = 'block';
-                document.getElementById('loader-container').classList.add('hidden');
-                document.getElementById('status').innerText = "SYSTEM READY";
-            }
-        };
-        assets[src].src = BASE_URL + src;
-    });
-}
-
-function startGame() { document.getElementById('overlay-screen').classList.add('hidden'); gameState = 'PLAYING'; music.play(); }
-
-function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+function resetGame() {
+    // 1. Kill all existing objects immediately
+    gameObjects = [];
     
-    // Background & Stars
-    ctx.fillStyle = currentBiome === 'night' ? "#1a0033" : "#4b0082";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#fff";
-    stars.forEach(s => {
-        let sx = (s.x - (frame * 0.1)) % canvas.width;
-        if (sx < 0) sx += canvas.width;
-        ctx.globalAlpha = s.opacity;
-        ctx.fillRect(sx, s.y, s.size, s.size);
-    });
-    ctx.globalAlpha = 1;
+    // 2. Reset Player Stats
+    score = 0;
+    frame = 0;
+    jumpHeight = 0;
+    jumpCount = 0;
+    hasQuantumShield = true;
+    snackStreak = 0;
+    
+    // 3. Reset UI
+    document.getElementById('recentMenu').innerHTML = '';
+    document.getElementById('status').innerText = "SYSTEM REBOOTED";
+    
+    // 4. Set State (This must be last)
+    gameState = 'PLAYING';
+}
 
-    // Buildings (Parallax)
-    const bSet = currentBiome === 'night' ? ['building-c.png', 'building-b.png', 'building-a.png'] : ['building-f.png', 'building-e.png', 'building-d.png'];
-    bSet.forEach((src, i) => {
-        if (assets[src] && assets[src].complete) {
-            ctx.globalAlpha = 0.3 + (i * 0.2);
-            let xPos = -(frame * (0.5 + i * 0.5)) % canvas.width;
-            ctx.drawImage(assets[src], xPos, canvas.height - GROUND_HEIGHT - 400, canvas.width, 400);
-            ctx.drawImage(assets[src], xPos + canvas.width, canvas.height - GROUND_HEIGHT - 400, canvas.width, 400);
-        }
-    });
-    ctx.globalAlpha = 1;
-
-    // Floor
-    if (assets['floor.png'] && assets['floor.png'].complete) {
-        for (let i = 0; i < (canvas.width / 50) + 2; i++) {
-            ctx.drawImage(assets['floor.png'], (-(frame * 6) % 50) + (i * 50), canvas.height - GROUND_HEIGHT, 50, GROUND_HEIGHT);
-        }
-    }
-
-    if (gameState === 'PLAYING') {
-        frame++;
-        if (frame % 100 === 0) gameObjects.push(new GameObject(Math.random() > 0.4 ? 'obstacle' : 'snack'));
-        if (jumpCount > 0) { jumpHeight -= yVelocity; yVelocity += 1.2; if (jumpHeight <= 0) { jumpHeight = 0; jumpCount = 0; } }
-        gameObjects.forEach((obj, i) => { obj.update(); if (obj.x < -200) gameObjects.splice(i, 1); });
-        document.getElementById('scoreDisplay').innerText = `SCORE: ${score}`;
-    }
 
     lori.draw(); azul.draw(); mochkil.draw();
     if (gameState === 'GAMEOVER') { ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.fillStyle = "#0ff"; ctx.fillText("CONNECTION LOST", canvas.width/2-80, canvas.height/2); }
