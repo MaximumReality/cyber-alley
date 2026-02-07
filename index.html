@@ -363,7 +363,7 @@ function drawBackground() {
         for (let i = 0; i < (canvas.width / 50) + 2; i++) {
             ctx.drawImage(assets['floor.png'], (-(frame * gameSpeed) % 50) + (i * 50), canvas.height - GROUND_Y_POS, 50, 100);
         }
-    }
+    
 } // <--- This bracket closes drawBackground correctly
 
 // --- ✨ THE MISSING BURST FUNCTION ---
