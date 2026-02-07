@@ -7,9 +7,20 @@
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', monospace; position: fixed; width: 100%; height: 100%; -webkit-user-select: none; user-select: none; }
         #gameCanvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
-        .ui-layer { position: absolute; top: 20px; left: 20px; color: #0ff; text-shadow: 0 0 10px #0ff; z-index: 10; pointer-events: none; }
+        
+        /* UI HUD */
+        .ui-layer { position: absolute; top: 15px; left: 15px; color: #0ff; text-shadow: 0 0 8px #0ff; z-index: 10; pointer-events: none; }
+        .game-controls { position: absolute; top: 15px; right: 15px; display: flex; gap: 10px; z-index: 100; }
+        .game-controls button { background: rgba(0, 255, 255, 0.1); border: 1px solid #0ff; color: #0ff; padding: 10px; border-radius: 5px; font-size: 18px; cursor: pointer; }
+        
+        /* STATUS BARS */
+        #stats-bars { position: absolute; top: 80px; left: 15px; width: 150px; display: flex; flex-direction: column; gap: 8px; z-index: 10; }
+        .bar-container { width: 100%; height: 8px; border: 1px solid #0ff; background: rgba(0,0,0,0.5); overflow: hidden; }
+        .bar-fill { height: 100%; transition: width 0.3s; }
+
+        /* LOADER */
         #overlay-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 200; }
-        #start-btn { display: none; background: transparent; border: 2px solid #0ff; color: #0ff; padding: 15px 35px; font-size: 22px; cursor: pointer; box-shadow: 0 0 15px #0ff; text-transform: uppercase; }
+        #start-btn { display: none; background: transparent; border: 2px solid #0ff; color: #0ff; padding: 15px 30px; font-size: 20px; cursor: pointer; box-shadow: 0 0 15px #0ff; }
         .hidden { display: none !important; }
     </style>
 </head>
@@ -18,12 +29,23 @@
     
     <div id="overlay-screen">
         <button id="start-btn" onclick="startGame()">CONNECT TO REALITY</button>
-        <div id="loader-text" style="color: #0ff; margin-top: 20px;">RECOVERING LOST DATA...</div>
+        <div id="loader-text" style="color: #0ff; margin-top: 20px;">SYNCING SQUAD...</div>
     </div>
 
     <div class="ui-layer">
         <div id="scoreDisplay">SCORE: 0</div>
-        <div id="status">SYSTEM RESTORED</div>
+        <div id="status">SYSTEM ONLINE</div>
+    </div>
+
+    <div id="stats-bars">
+        <div class="bar-container"><div id="shield-bar" class="bar-fill" style="width: 100%; background: #0ff;"></div></div>
+        <div class="bar-container"><div id="snack-bar" class="bar-fill" style="width: 0%; background: #f0f;"></div></div>
+    </div>
+
+    <div class="game-controls">
+        <button onclick="location.reload()">🏠</button>
+        <button id="muteBtn" onclick="toggleMute()">🔊</button>
+        <button onclick="togglePause()">⏸️</button>
     </div>
 
     <canvas id="gameCanvas"></canvas>
@@ -34,57 +56,39 @@ const ctx = canvas.getContext('2d');
 const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
 const music = document.getElementById('bgMusic');
 
-// --- 1. THE COMPLETE SNACK & OBSTACLE POOLS ---
+// --- ASSET POOLS ---
 const snackPool = ['credit_card_1.png', 'swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png', 'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 'fried-egg.png', 'green_apple.png', 'hotdog.png', 'marshmallows.png', 'milk_chocolate.png', 'pancake_stack.png', 'popcorn.png', 'red_apple.png', 'sandwich.png', 'strawberry-candy.png', 'watermelon-slice.png', 'tuna_can.png', 'ketchup.png', 'soft_drink_blue.png', 'milk_gallon.png', 'orange_juice.png'];
 const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 'fish-bones.png'];
+const allAssets = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'floor.png', 'Lori-run.png', 'Lori-run2.png', 'Lori-run3.png', 'Azul-run.png', 'Azul-run2.png', 'Azul-run3.png', 'Mochkil.png', 'Mochkil2.png', ...snackPool, ...obstaclePool];
 
-// --- 2. CONFIG & STATE ---
-const GROUND_HEIGHT = 100;
-let gameState = 'LOADING', score = 0, frame = 0;
-let jumpHeight = 0, yVelocity = 0, jumpCount = 0;
-let hasQuantumShield = true, snackStreak = 0;
-let gameObjects = [];
-const stars = Array.from({ length: 80 }, () => ({ x: Math.random() * 2000, y: Math.random() * 400, size: Math.random() * 2, opacity: Math.random() }));
-
-// --- 3. ASSET LOADER ---
-const assets = {};
-let loadedCount = 0;
-const allFiles = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'floor.png', 'Lori-run.png', 'Lori-run2.png', 'Lori-run3.png', 'Azul-run.png', 'Azul-run2.png', 'Azul-run3.png', 'Mochkil.png', 'Mochkil2.png', ...snackPool, ...obstaclePool];
+const GROUND_HEIGHT = 100, assets = {};
+let gameState = 'LOADING', score = 0, frame = 0, jumpHeight = 0, yVelocity = 0, jumpCount = 0;
+let hasShield = true, snackStreak = 0, gameObjects = [];
+const stars = Array.from({ length: 60 }, () => ({ x: Math.random() * 2000, y: Math.random() * 400, size: Math.random() * 2, op: Math.random() }));
 
 function load() {
-    allFiles.forEach(file => {
+    let loaded = 0;
+    allAssets.forEach(file => {
         const img = new Image();
-        img.onload = () => {
-            loadedCount++;
-            if (loadedCount >= allFiles.length) {
-                document.getElementById('start-btn').style.display = 'block';
-                document.getElementById('loader-text').innerText = "LINK READY";
-            }
-        };
-        img.onerror = () => loadedCount++;
+        img.onload = () => { if (++loaded >= allAssets.length) showBtn(); };
+        img.onerror = () => { if (++loaded >= allAssets.length) showBtn(); };
         img.src = BASE_URL + file;
         assets[file] = img;
     });
-    setTimeout(() => { document.getElementById('start-btn').style.display = 'block'; }, 4000);
+    setTimeout(showBtn, 4000);
 }
+function showBtn() { document.getElementById('start-btn').style.display = 'block'; document.getElementById('loader-text').innerText = "READY"; }
 
-// --- 4. THE TEAM ---
 class Player {
-    constructor(name, x, sprites, w, h) {
-        this.name = name; this.x = x; this.sprites = sprites; this.w = w; this.h = h;
-        this.frameIndex = 0;
-    }
+    constructor(name, x, sprites, w, h) { this.name = name; this.x = x; this.sprites = sprites; this.w = w; this.h = h; this.f = 0; }
     draw() {
-        // Only Lori and Azul animate constantly. Mochkil waits for snacks.
-        if (this.name !== 'mochkil') {
-            if (frame % 8 === 0) this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
-        }
-        const drawY = canvas.height - GROUND_HEIGHT - this.h - (this.name !== 'mochkil' ? jumpHeight : 0);
-        const img = assets[this.sprites[this.frameIndex]];
+        if (this.name !== 'mochkil') { if (frame % 8 === 0) this.f = (this.f + 1) % this.sprites.length; }
+        const dy = canvas.height - GROUND_HEIGHT - this.h - (this.name !== 'mochkil' ? jumpHeight : 0);
+        const img = assets[this.sprites[this.f]];
         if (img && img.complete) {
             ctx.save();
-            if (this.name === 'azul' && hasQuantumShield) { ctx.shadowBlur = 15; ctx.shadowColor = "#0ff"; }
-            ctx.drawImage(img, this.x, drawY, this.w, this.h);
+            if (this.name === 'azul' && hasShield) { ctx.shadowBlur = 15; ctx.shadowColor = "#0ff"; }
+            ctx.drawImage(img, this.x, dy, this.w, this.h);
             ctx.restore();
         }
     }
@@ -94,103 +98,89 @@ const lori = new Player("lori", 50, ['Lori-run.png', 'Lori-run2.png', 'Lori-run3
 const azul = new Player("azul", 150, ['Azul-run.png', 'Azul-run2.png', 'Azul-run3.png'], 60, 60);
 const mochkil = new Player("mochkil", 240, ['Mochkil.png', 'Mochkil2.png'], 75, 75);
 
-// --- 5. OBJECTS & COLLISION ---
 class GameObject {
     constructor(type) {
         this.type = type;
-        const pool = type === 'snack' ? snackPool : obstaclePool;
-        this.file = pool[Math.floor(Math.random() * pool.length)];
+        const p = type === 'snack' ? snackPool : obstaclePool;
+        this.file = p[Math.floor(Math.random() * p.length)];
         this.x = canvas.width + 100;
-        this.w = this.file.includes('truck') ? 150 : 55;
+        this.w = this.file.includes('truck') ? 160 : 55;
         this.h = this.file.includes('truck') ? 90 : 55;
         this.y = canvas.height - GROUND_HEIGHT - this.h;
-        if (type === 'snack' && Math.random() > 0.5) this.y -= 160;
-        this.collected = false;
+        if (type === 'snack' && Math.random() > 0.5) this.y -= 150;
+        this.done = false;
     }
     update() {
         this.x -= 7;
         const img = assets[this.file];
-        if (!img || !img.complete || this.collected) return;
+        if (!img || this.done) return;
         ctx.drawImage(img, this.x, this.y, this.w, this.h);
 
-        const loriY = canvas.height - GROUND_HEIGHT - lori.h - jumpHeight;
-        // Collision logic
-        if (this.x < 280 && this.x + this.w > 50) { // In range of the team
-            let hit = false;
-            if (this.y < loriY + lori.h && this.y + this.h > loriY) hit = true; // Jumping collision
-            if (this.y < (canvas.height - GROUND_HEIGHT) && this.y + this.h > (canvas.height - GROUND_HEIGHT - 75)) hit = true; // Ground collision
-
-            if (hit) {
-                if (this.type === 'snack') {
-                    this.collected = true; score += 150;
-                    mochkil.frameIndex = 1; setTimeout(() => mochkil.frameIndex = 0, 300);
-                } else if (!hasQuantumShield) {
-                    gameState = 'GAMEOVER'; music.pause();
-                } else {
-                    this.collected = true; hasQuantumShield = false;
-                }
-            }
+        const ly = canvas.height - GROUND_HEIGHT - lori.h - jumpHeight;
+        // Lori/Azul Collision
+        if (this.x < 180 && this.x + this.w > 50 && this.y < ly + lori.h && this.y + this.h > ly) {
+            if (this.type === 'snack') this.collect(); else this.hit();
         }
+        // Mochkil Collision (INVINCIBLE to obstacles)
+        if (this.type === 'snack' && this.x < 310 && this.x + this.w > 240) {
+            const my = canvas.height - GROUND_HEIGHT - mochkil.h;
+            if (this.y < my + mochkil.h && this.y + this.h > my) this.collect();
+        }
+    }
+    collect() {
+        this.done = true; score += 150; snackStreak++;
+        document.getElementById('snack-bar').style.width = (snackStreak / 5 * 100) + "%";
+        if (snackStreak >= 5 && !hasShield) { hasShield = true; snackStreak = 0; document.getElementById('shield-bar').style.width = "100%"; }
+        mochkil.f = 1; setTimeout(() => mochkil.f = 0, 300);
+    }
+    hit() {
+        if (hasShield) { hasShield = false; this.done = true; document.getElementById('shield-bar').style.width = "0%"; }
+        else { gameState = 'GAMEOVER'; music.pause(); }
     }
 }
 
-// --- 6. ENGINE ---
 function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#1a0033"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Stars
-    ctx.fillStyle = "#fff";
     stars.forEach(s => {
         let sx = (s.x - (frame * 0.1)) % canvas.width;
         if (sx < 0) sx += canvas.width;
-        ctx.globalAlpha = s.opacity;
-        ctx.fillRect(sx, s.y, s.size, s.size);
+        ctx.globalAlpha = s.op; ctx.fillStyle = "#fff"; ctx.fillRect(sx, s.y, s.size, s.size);
     });
     ctx.globalAlpha = 1;
 
     if (gameState === 'PLAYING') {
         frame++;
-        // City Parallax
         ['building-c.png', 'building-b.png', 'building-a.png'].forEach((src, i) => {
-            const img = assets[src];
-            if (img && img.complete) {
-                let xPos = -(frame * (0.5 + i * 0.5)) % canvas.width;
-                ctx.globalAlpha = 0.4 + (i * 0.2);
-                ctx.drawImage(img, xPos, canvas.height - GROUND_HEIGHT - 400, canvas.width, 400);
-                ctx.drawImage(img, xPos + canvas.width, canvas.height - GROUND_HEIGHT - 400, canvas.width, 400);
+            const img = assets[src]; if (img) {
+                let xp = -(frame * (0.5 + i * 0.5)) % canvas.width;
+                ctx.globalAlpha = 0.4 + (i * 0.2); ctx.drawImage(img, xp, canvas.height-GROUND_HEIGHT-400, canvas.width, 400);
+                ctx.drawImage(img, xp + canvas.width, canvas.height-GROUND_HEIGHT-400, canvas.width, 400);
             }
         });
         ctx.globalAlpha = 1;
-
-        // Floor
-        const fImg = assets['floor.png'];
-        if (fImg) for (let i = 0; i < (canvas.width / 50) + 2; i++) ctx.drawImage(fImg, (-(frame * 7) % 50) + (i * 50), canvas.height - GROUND_HEIGHT, 50, GROUND_HEIGHT);
-
-        // Objects & Physics
+        const fi = assets['floor.png']; if (fi) for (let i=0; i<(canvas.width/50)+2; i++) ctx.drawImage(fi, (-(frame*7)%50)+(i*50), canvas.height-GROUND_HEIGHT, 50, GROUND_HEIGHT);
         if (frame % 100 === 0) gameObjects.push(new GameObject(Math.random() > 0.4 ? 'snack' : 'obstacle'));
         if (jumpCount > 0) { jumpHeight -= yVelocity; yVelocity += 1.2; if (jumpHeight <= 0) { jumpHeight = 0; jumpCount = 0; } }
-        gameObjects.forEach((obj, i) => { obj.update(); if (obj.x < -200) gameObjects.splice(i, 1); });
+        gameObjects.forEach((o, i) => { o.update(); if (o.x < -200) gameObjects.splice(i, 1); });
         document.getElementById('scoreDisplay').innerText = `SCORE: ${score}`;
     }
-
     lori.draw(); azul.draw(); mochkil.draw();
     if (gameState === 'GAMEOVER') {
         ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0,0,canvas.width,canvas.height);
-        ctx.fillStyle = "#0ff"; ctx.textAlign = "center"; ctx.font = "24px Courier";
-        ctx.fillText("CONNECTION LOST", canvas.width/2, canvas.height/2);
-        ctx.fillText("TAP TO REBOOT", canvas.width/2, canvas.height/2 + 50);
+        ctx.fillStyle = "#0ff"; ctx.textAlign = "center"; ctx.font = "24px Courier"; ctx.fillText("CONNECTION LOST", canvas.width/2, canvas.height/2);
     }
     requestAnimationFrame(animate);
 }
 
 function startGame() { document.getElementById('overlay-screen').classList.add('hidden'); gameState = 'PLAYING'; music.play(); }
-function handleInput() { if (gameState === 'GAMEOVER') { score = 0; frame = 0; gameObjects = []; hasQuantumShield = true; gameState = 'PLAYING'; music.currentTime = 0; music.play(); } else if (jumpCount < 2) { yVelocity = -18; jumpCount++; } }
+function toggleMute() { music.muted = !music.muted; document.getElementById('muteBtn').innerText = music.muted ? "🔇" : "🔊"; }
+function togglePause() { if (gameState === 'PLAYING') { gameState = 'PAUSED'; music.pause(); } else if (gameState === 'PAUSED') { gameState = 'PLAYING'; music.play(); } }
+function handleInput() { if (gameState === 'GAMEOVER') location.reload(); else if (jumpCount < 2) { yVelocity = -18; jumpCount++; } }
 
 window.addEventListener('mousedown', handleInput);
-window.addEventListener('touchstart', (e) => { if (gameState !== 'LOADING') { e.preventDefault(); handleInput(); } }, {passive: false});
+window.addEventListener('touchstart', (e) => { if (gameState !== 'LOADING' && e.target.tagName !== 'BUTTON') { e.preventDefault(); handleInput(); } }, {passive: false});
 window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
-
 canvas.width = window.innerWidth; canvas.height = window.innerHeight;
 load(); animate();
 </script>
