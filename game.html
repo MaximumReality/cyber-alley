@@ -29,36 +29,12 @@
                         linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
             background-size: 100% 4px, 3px 100%; pointer-events: none; z-index: 10;
         }
-        @keyframes glitch-glow {
-            0% { text-shadow: 0 0 5px #0ff; }
-            50% { text-shadow: 0 0 20px #0ff, 0 0 30px #0ff; color: #fff; }
-            100% { text-shadow: 0 0 5px #0ff; }
-        }
-        .shield-ready { animation: glitch-glow 0.5s ease-in-out 3; }
         #loader-container {
-    position: absolute;
-    top: 60%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 250px;
-    height: 10px;
-    border: 1px solid #0ff;
-    padding: 2px;
-    z-index: 100;
-}
-
-#loader-bar {
-    width: 0%;
-    height: 100%;
-    background: #0ff;
-    box-shadow: 0 0 15px #0ff;
-    transition: width 0.2s ease-out;
-}
-
-.hidden {
-    display: none !important;
-}
-
+            position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%);
+            width: 250px; height: 10px; border: 1px solid #0ff; padding: 2px; z-index: 100;
+        }
+        #loader-bar { width: 0%; height: 100%; background: #0ff; box-shadow: 0 0 15px #0ff; transition: width 0.2s ease-out; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
@@ -76,10 +52,7 @@
         <button id="muteBtn" onclick="toggleMute()" title="Mute">🔊</button>
         <button id="pauseBtn" onclick="togglePause()" title="Pause">⏸️</button>
     </div>
-<div id="loader-container">
-    <div id="loader-bar"></div>
-</div>
-
+    <div id="loader-container"><div id="loader-bar"></div></div>
     <canvas id="gameCanvas"></canvas>
 
 <script>
@@ -104,26 +77,21 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
 
-// --- LOADING LOGIC ---
 let assetsLoaded = 0;
 let totalAssets = 0;
+
 function assetLoaded() {
     assetsLoaded++;
     const progress = (assetsLoaded / totalAssets) * 100;
-    
-    // Update the visual bar
     const bar = document.getElementById('loader-bar');
     if (bar) bar.style.width = progress + "%";
-
     if (assetsLoaded >= totalAssets) {
         document.getElementById('status').innerText = "SYSTEM ONLINE: TAP TO START";
-        // Hide the loader bar once finished
         document.getElementById('loader-container').classList.add('hidden');
     } else {
         document.getElementById('status').innerText = `BOOTING: ${Math.round(progress)}%`;
     }
 }
-
 
 const biomes = {
     night: { bg: 'gg-bg.png', buildings: ['building-a.png', 'building-b.png', 'building-c.png'], overlay: "rgba(43, 0, 43, 1)" },
@@ -153,30 +121,21 @@ let gameObjects = [];
 let shake = 0;
 let particles = [];
 
-const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 'fish-bones.png', 'smashed-can.png', 'smashed-juice-box.png', 'smashed-soda-can.png', 'detergent.png', 'receipt.png', 'scrub_brush.png', 'toilet_paper.png', 'hand_sanitiser.png', 'kitchen_soap.png', 'frying-pan.png'];
-const snackPool = ['credit_card_1.png', 'swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png', 'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 'fried-egg.png', 'green_apple.png', 'hotdog.png', 'marshmallows.png', 'milk_chocolate.png', 'pancake_stack.png', 'popcorn.png', 'red_apple.png', 'sandwich.png', 'strawberry-candy.png', 'watermelon-slice.png', 'tuna_can.png'];
+const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 'fish-bones.png', 'smashed-can.png', 'smashed-juice-box.png', 'smashed-soda-can.png', 'detergent.png', 'receipt.png', 'scrub_brush.png', 'toilet_paper.png', 'hand_sanitiser.png', 'kitchen_soap.png', 'frying-pan.png', 'basket_metal.png'];
+const snackPool = ['credit_card_1.png', 'swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png', 'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 'fried-egg.png', 'green_apple.png', 'hotdog.png', 'marshmallows.png', 'milk_chocolate.png', 'pancake_stack.png', 'popcorn.png', 'red_apple.png', 'sandwich.png', 'strawberry-candy.png', 'watermelon-slice.png', 'tuna_can.png', 'ketchup.png', 'soft_drink_blue.png', 'milk_gallon.png', 'orange_juice.png'];
 
 const assets = {};
 const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'building-d.png', 'building-e.png', 'building-f.png', 'floor.png', 'snack-portal.png'];
-totalAssets = toLoad.length + 8; // Plus player sprites
-
-toLoad.forEach(src => { 
-    assets[src] = new Image(); 
-    assets[src].onload = assetLoaded;
-    assets[src].src = BASE_URL + src; 
-});
 
 function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 window.addEventListener('resize', resize);
 resize();
 
 class Player {
-    constructor(name, x, sprites) {
-        this.name = name; this.x = x;
+    constructor(name, x, sprites, w, h) {
+        this.name = name; this.x = x; this.w = w; this.h = h;
         this.sprites = sprites.map(file => { 
-            const img = new Image(); 
-            img.onload = assetLoaded;
-            img.src = BASE_URL + file; 
+            const img = new Image(); img.onload = assetLoaded; img.src = BASE_URL + file; 
             return img; 
         });
         this.frameIndex = 0;
@@ -188,18 +147,20 @@ class Player {
         const drawY = canvas.height - GROUND_Y_POS - CHAR_SIZE - (this.name !== 'mochkil' ? jumpHeight : 0);
         if (this.sprites[this.frameIndex].complete) {
             ctx.save();
-            if (this.name === 'azul' && hasQuantumShield) { ctx.shadowBlur = 20; ctx.shadowColor = "#0ff"; }
+            if (this.name === 'azul' && hasQuantumShield) { ctx.shadowBlur = 15; ctx.shadowColor = "#0ff"; }
             ctx.drawImage(this.sprites[this.frameIndex], this.x, drawY, CHAR_SIZE, CHAR_SIZE); 
             ctx.restore();
         }
     }
 }
 
-const lori = new Player("lori", 50, ['Lori-run.png', 'Lori-run2.png', 'Lori-run3.png']);
-const azul = new Player("azul", 140, ['Azul-run.png', 'Azul-run2.png', 'Azul-run3.png']);
-const mochkil = new Player("mochkil", 230, ['Mochkil.png', 'Mochkil2.png']);
+const lori = new Player("lori", 50, ['Lori-run.png', 'Lori-run2.png', 'Lori-run3.png'], 60, 80);
+const azul = new Player("azul", 140, ['Azul-run.png', 'Azul-run2.png', 'Azul-run3.png'], 60, 80);
+const mochkil = new Player("mochkil", 230, ['Mochkil.png', 'Mochkil2.png'], 70, 70);
 
-// Rest of the game logic (Reset, Jump, Object classes) remains the same as your build...
+totalAssets = toLoad.length + lori.sprites.length + azul.sprites.length + mochkil.sprites.length;
+toLoad.forEach(src => { assets[src] = new Image(); assets[src].onload = assetLoaded; assets[src].src = BASE_URL + src; });
+
 class GameObject {
     constructor(type) {
         this.type = type;
@@ -217,25 +178,29 @@ class GameObject {
     update() {
         this.x -= gameSpeed;
         const loriJumpY = canvas.height - GROUND_Y_POS - CHAR_SIZE - jumpHeight;
+        
         if (!this.collected && this.type === 'obstacle') {
-            const loriHitX = lori.x + 45;
-            if (loriHitX < this.x + this.w - 15 && loriHitX + 30 > this.x + 15 && loriJumpY + 85 > this.y + 10 && loriJumpY + 15 < this.y + this.h) {
+            const isColliding = lori.x < this.x + this.w - 10 && lori.x + lori.w > this.x + 10 && 
+                               loriJumpY < this.y + this.h - 10 && loriJumpY + lori.h > this.y + 10;
+            if (isColliding) {
                 if (hasQuantumShield) { hasQuantumShield = false; snackStreak = 0; this.collected = true; shake = 20; document.getElementById('status').innerText = "SHIELD BROKEN!"; }
                 else { gameState = 'GAMEOVER'; music.pause(); }
             }
         }
         if (!this.collected && this.type === 'snack') {
-            const targets = [{x: lori.x, y: loriJumpY}, {x: azul.x, y: loriJumpY}, {x: mochkil.x, y: canvas.height - GROUND_Y_POS - CHAR_SIZE}];
+            const targets = [
+                {x: lori.x, y: loriJumpY, w: lori.w, h: lori.h}, 
+                {x: azul.x, y: loriJumpY, w: azul.w, h: azul.h}, 
+                {x: mochkil.x, y: canvas.height - GROUND_Y_POS - CHAR_SIZE, w: mochkil.w, h: mochkil.h}
+            ];
             targets.forEach(t => {
-                if (t.x < this.x + this.w && t.x + 80 > this.x && t.y < this.y + this.h && t.y + 80 > this.y) {
+                if (t.x < this.x + this.w && t.x + t.w > this.x && t.y < this.y + this.h && t.y + t.h > this.y) {
                     this.collected = true; 
                     let sparkColor = this.file.includes('credit_card_1') ? '#ffd700' : '#00ffff';
                     createBurst(this.x, this.y, sparkColor); 
-                    if (this.file.includes('credit_card_1')) {
-                        score += 500; document.getElementById('status').innerText = "CREDIT INCREASED +500";
-                    } else if (this.file.includes('snack-portal')) {
-                        handlePortalEntry();
-                    } else {
+                    if (this.file.includes('credit_card_1')) { score += 500; document.getElementById('status').innerText = "CREDIT INCREASED +500"; } 
+                    else if (this.file.includes('snack-portal')) { handlePortalEntry(); } 
+                    else {
                         score += 150; updateMenu(this.file);
                         if (!hasQuantumShield) {
                             snackStreak++; document.getElementById('status').innerText = `REBOOTING: ${snackStreak}/5`;
@@ -259,7 +224,7 @@ function handlePortalEntry() {
 }
 
 function resetGame() {
-    if (assetsLoaded < totalAssets) return; // Wait for load
+    if (assetsLoaded < totalAssets) return;
     score = 0; snackStreak = 0; gameObjects = []; baseSpeed = 6; gameSpeed = baseSpeed;
     currentBiome = 'night'; isTransitioning = false; frame = 0; gameState = 'PLAYING'; 
     recentSnacks = []; jumpCount = 0; jumpHeight = 0; hasQuantumShield = true;
