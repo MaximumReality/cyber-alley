@@ -5,78 +5,136 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Maximum Reality: Cyber Alley</title>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', monospace; position: fixed; width: 100%; height: 100%; }
-        #gameCanvas { display: block; width: 100vw; height: 100vh; }
-        
-        /* UI OVERLAYS */
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', monospace; position: fixed; width: 100%; height: 100%; -webkit-user-select: none; user-select: none; }
+        #gameCanvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
         .ui-layer { position: absolute; top: 20px; left: 20px; color: #0ff; text-shadow: 0 0 10px #0ff; z-index: 10; pointer-events: none; }
-        #status { font-size: 18px; margin-top: 5px; }
-        
-        /* LOADER & START BUTTON */
-        #overlay-screen {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); display: flex; flex-direction: column;
-            justify-content: center; align-items: center; z-index: 100;
-        }
-        #loader-container { width: 200px; height: 10px; border: 1px solid #0ff; padding: 2px; }
-        #loader-bar { width: 0%; height: 100%; background: #0ff; }
-        #start-btn { 
-            display: none; background: transparent; border: 2px solid #0ff; 
-            color: #0ff; padding: 15px 30px; font-size: 20px; cursor: pointer;
-            box-shadow: 0 0 15px #0ff;
-        }
+        .game-controls { position: absolute; top: 20px; right: 20px; display: flex; gap: 15px; z-index: 100; }
+        .game-controls button { background: rgba(0, 255, 255, 0.1); border: 1px solid #0ff; color: #0ff; padding: 8px; border-radius: 5px; }
+        #recentMenu { position: absolute; top: 80px; left: 20px; display: flex; gap: 8px; height: 40px; }
+        #recentMenu img { width: 40px; height: 40px; border: 1px solid #0ff; background: rgba(0,255,255,0.1); border-radius: 4px; }
+        #overlay-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 200; }
+        #loader-container { width: 250px; height: 12px; border: 1px solid #0ff; padding: 3px; margin-bottom: 20px; }
+        #loader-bar { width: 0%; height: 100%; background: #0ff; box-shadow: 0 0 15px #0ff; transition: width 0.2s; }
+        #start-btn { display: none; background: transparent; border: 2px solid #0ff; color: #0ff; padding: 15px 35px; font-size: 22px; cursor: pointer; box-shadow: 0 0 15px #0ff; text-transform: uppercase; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
+    <audio id="bgMusic" loop><source src="https://maximumreality.github.io/cyber-alley/futuristic-cyberpunk-industrial-music.mp3" type="audio/mpeg"></audio>
     <div id="overlay-screen">
         <div id="loader-container"><div id="loader-bar"></div></div>
         <button id="start-btn" onclick="startGame()">CONNECT TO REALITY</button>
     </div>
-
     <div class="ui-layer">
         <div id="scoreDisplay">SCORE: 0</div>
         <div id="status">INITIALIZING...</div>
     </div>
-
+    <div id="recentMenu"></div>
+    <div class="game-controls">
+        <button onclick="location.reload()">🏠</button>
+        <button id="muteBtn" onclick="toggleMute()">🔊</button>
+    </div>
     <canvas id="gameCanvas"></canvas>
 
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
+const music = document.getElementById('bgMusic');
 
-// 1. ASSET LIST
-const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'floor.png'];
-const playerSprites = ['Lori-run.png', 'Lori-run2.png', 'Lori-run3.png', 'Azul-run.png', 'Azul-run2.png', 'Azul-run3.png', 'Mochkil.png', 'Mochkil2.png'];
+// --- ASSETS & POOLS ---
+const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 'fish-bones.png', 'smashed-can.png', 'smashed-juice-box.png', 'smashed-soda-can.png', 'detergent.png', 'receipt.png', 'scrub_brush.png', 'toilet_paper.png', 'hand_sanitiser.png', 'kitchen_soap.png', 'frying-pan.png', 'basket_metal.png'];
+const snackPool = ['credit_card_1.png', 'swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png', 'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 'fried-egg.png', 'green_apple.png', 'hotdog.png', 'marshmallows.png', 'milk_chocolate.png', 'pancake_stack.png', 'popcorn.png', 'red_apple.png', 'sandwich.png', 'strawberry-candy.png', 'watermelon-slice.png', 'tuna_can.png', 'ketchup.png', 'soft_drink_blue.png', 'milk_gallon.png', 'orange_juice.png'];
+const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'building-d.png', 'building-e.png', 'building-f.png', 'floor.png', 'snack-portal.png'];
 const assets = {};
 let loadedCount = 0;
 
-// 2. PHYSICS & STARS
-const GROUND_HEIGHT = 100; // Height of the floor from the bottom
-let frame = 0;
+// --- CONFIG ---
+const GROUND_HEIGHT = 100;
 let gameState = 'LOADING';
+let currentBiome = 'night';
 let score = 0;
+let frame = 0;
 let jumpHeight = 0;
 let yVelocity = 0;
-let isJumping = false;
+let jumpCount = 0;
+let hasQuantumShield = true;
+let snackStreak = 0;
+let gameObjects = [];
+const stars = Array.from({ length: 80 }, () => ({ x: Math.random() * 2000, y: Math.random() * 400, size: Math.random() * 2, opacity: Math.random() }));
 
-const stars = Array.from({ length: 50 }, () => ({
-    x: Math.random() * 2000,
-    y: Math.random() * 300,
-    size: Math.random() * 2
-}));
+// --- CLASSES ---
+class Player {
+    constructor(name, x, sprites, w, h) {
+        this.name = name; this.x = x; this.w = w; this.h = h;
+        this.sprites = sprites; this.frameIndex = 0;
+    }
+    draw() {
+        if (this.name !== 'mochkil' || this.frameIndex !== 0) {
+            if (frame % 8 === 0) this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
+        }
+        const drawY = canvas.height - GROUND_HEIGHT - this.h - (this.name !== 'mochkil' ? jumpHeight : 0);
+        const img = assets[this.sprites[this.frameIndex]];
+        if (img && img.complete) {
+            ctx.save();
+            if (this.name === 'azul' && hasQuantumShield) { ctx.shadowBlur = 15; ctx.shadowColor = "#0ff"; }
+            ctx.drawImage(img, this.x, drawY, this.w, this.h);
+            ctx.restore();
+        }
+    }
+}
 
-// 3. LOAD ENGINE
+const lori = new Player("lori", 50, ['Lori-run.png', 'Lori-run2.png', 'Lori-run3.png'], 90, 120);
+const azul = new Player("azul", 160, ['Azul-run.png', 'Azul-run2.png', 'Azul-run3.png'], 65, 65);
+const mochkil = new Player("mochkil", 250, ['Mochkil.png', 'Mochkil2.png'], 75, 75);
+
+class GameObject {
+    constructor(type) {
+        this.type = type;
+        const pool = type === 'obstacle' ? obstaclePool : snackPool;
+        this.file = pool[Math.floor(Math.random() * pool.length)];
+        this.img = new Image(); this.img.src = BASE_URL + this.file;
+        this.x = canvas.width + 100; this.collected = false;
+        this.w = this.file.includes('truck') ? 180 : 55;
+        this.h = this.file.includes('truck') ? 100 : 55;
+        this.y = canvas.height - GROUND_HEIGHT - this.h;
+        if (type === 'snack') this.y -= (Math.random() > 0.5 ? 0 : 160);
+    }
+    update() {
+        if (this.collected) return;
+        this.x -= 6;
+        const loriY = canvas.height - GROUND_HEIGHT - lori.h - jumpHeight;
+        const team = [
+            {p: lori, y: loriY}, {p: azul, y: loriY}, 
+            {p: mochkil, y: canvas.height - GROUND_HEIGHT - mochkil.h}
+        ];
+        team.forEach((char, i) => {
+            if (char.p.x < this.x + this.w && char.p.x + char.p.w > this.x && char.y < this.y + this.h && char.y + char.p.h > this.y) {
+                if (this.type === 'obstacle' && i === 0) {
+                    if (hasQuantumShield) { hasQuantumShield = false; this.collected = true; document.getElementById('status').innerText = "SHIELD BROKEN!"; }
+                    else { gameState = 'GAMEOVER'; music.pause(); }
+                } else if (this.type === 'snack') {
+                    this.collected = true; score += 150; updateMenu(this.file);
+                    if (!hasQuantumShield) { snackStreak++; if (snackStreak >= 5) { hasQuantumShield = true; snackStreak = 0; document.getElementById('status').innerText = "SHIELD RESTORED"; } }
+                    mochkil.frameIndex = 1; setTimeout(() => { mochkil.frameIndex = 0; }, 300);
+                }
+            }
+        });
+        if (this.img.complete) ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
+    }
+}
+
+// --- ENGINE ---
 function load() {
-    const all = [...toLoad, ...playerSprites];
+    const all = [...toLoad, ...lori.sprites, ...azul.sprites, ...mochkil.sprites];
     all.forEach(src => {
         assets[src] = new Image();
         assets[src].onload = () => {
             loadedCount++;
             document.getElementById('loader-bar').style.width = (loadedCount / all.length * 100) + "%";
             if (loadedCount === all.length) {
-                document.getElementById('loader-container').style.display = 'none';
                 document.getElementById('start-btn').style.display = 'block';
+                document.getElementById('loader-container').classList.add('hidden');
                 document.getElementById('status').innerText = "SYSTEM READY";
             }
         };
@@ -84,68 +142,70 @@ function load() {
     });
 }
 
-function startGame() {
-    document.getElementById('overlay-screen').style.display = 'none';
-    gameState = 'PLAYING';
-}
+function startGame() { document.getElementById('overlay-screen').classList.add('hidden'); gameState = 'PLAYING'; music.play(); }
 
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Background Color
-    ctx.fillStyle = "#1a0033";
+    // Background & Stars
+    ctx.fillStyle = currentBiome === 'night' ? "#1a0033" : "#4b0082";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Stars (Behind Everything)
     ctx.fillStyle = "#fff";
     stars.forEach(s => {
-        let sx = (s.x - (frame * 0.5)) % canvas.width;
+        let sx = (s.x - (frame * 0.1)) % canvas.width;
         if (sx < 0) sx += canvas.width;
+        ctx.globalAlpha = s.opacity;
         ctx.fillRect(sx, s.y, s.size, s.size);
     });
+    ctx.globalAlpha = 1;
 
-    // Floor (Anchored to Bottom)
+    // Buildings (Parallax)
+    const bSet = currentBiome === 'night' ? ['building-c.png', 'building-b.png', 'building-a.png'] : ['building-f.png', 'building-e.png', 'building-d.png'];
+    bSet.forEach((src, i) => {
+        if (assets[src] && assets[src].complete) {
+            ctx.globalAlpha = 0.3 + (i * 0.2);
+            let xPos = -(frame * (0.5 + i * 0.5)) % canvas.width;
+            ctx.drawImage(assets[src], xPos, canvas.height - GROUND_HEIGHT - 400, canvas.width, 400);
+            ctx.drawImage(assets[src], xPos + canvas.width, canvas.height - GROUND_HEIGHT - 400, canvas.width, 400);
+        }
+    });
+    ctx.globalAlpha = 1;
+
+    // Floor
     if (assets['floor.png'] && assets['floor.png'].complete) {
         for (let i = 0; i < (canvas.width / 50) + 2; i++) {
             ctx.drawImage(assets['floor.png'], (-(frame * 6) % 50) + (i * 50), canvas.height - GROUND_HEIGHT, 50, GROUND_HEIGHT);
         }
     }
 
-    // Characters
     if (gameState === 'PLAYING') {
         frame++;
-        if (isJumping) {
-            jumpHeight -= yVelocity;
-            yVelocity += 1.2;
-            if (jumpHeight <= 0) { jumpHeight = 0; isJumping = false; }
-        }
+        if (frame % 100 === 0) gameObjects.push(new GameObject(Math.random() > 0.4 ? 'obstacle' : 'snack'));
+        if (jumpCount > 0) { jumpHeight -= yVelocity; yVelocity += 1.2; if (jumpHeight <= 0) { jumpHeight = 0; jumpCount = 0; } }
+        gameObjects.forEach((obj, i) => { obj.update(); if (obj.x < -200) gameObjects.splice(i, 1); });
+        document.getElementById('scoreDisplay').innerText = `SCORE: ${score}`;
     }
 
-    // Simple Draw for Lori (Testing Position)
-    const loriImg = assets['Lori-run.png'];
-    if (loriImg && loriImg.complete) {
-        ctx.drawImage(loriImg, 50, canvas.height - GROUND_HEIGHT - 100 - jumpHeight, 80, 100);
-    }
-
+    lori.draw(); azul.draw(); mochkil.draw();
+    if (gameState === 'GAMEOVER') { ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.fillStyle = "#0ff"; ctx.fillText("CONNECTION LOST", canvas.width/2-80, canvas.height/2); }
     requestAnimationFrame(draw);
 }
 
-function jump() {
-    if (gameState === 'PLAYING' && !isJumping) {
-        isJumping = true;
-        yVelocity = -20;
-    }
+function updateMenu(file) {
+    const menu = document.getElementById('recentMenu');
+    menu.innerHTML = `<img src="${BASE_URL + file}">` + menu.innerHTML;
+    if (menu.children.length > 5) menu.removeChild(menu.lastChild);
 }
 
-window.addEventListener('touchstart', (e) => { if(gameState === 'PLAYING') jump(); });
-window.addEventListener('mousedown', (e) => { if(gameState === 'PLAYING') jump(); });
+function jump() { if (gameState === 'PLAYING' && jumpCount < 2) { yVelocity = -18; jumpCount++; } }
+function toggleMute() { music.muted = !music.muted; document.getElementById('muteBtn').innerText = music.muted ? "🔇" : "🔊"; }
 
-function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-window.addEventListener('resize', resize);
+window.addEventListener('touchstart', (e) => { if(e.target.tagName !== 'BUTTON') { e.preventDefault(); jump(); } }, {passive: false});
+window.addEventListener('mousedown', (e) => { if(e.target.tagName !== 'BUTTON') jump(); });
 
-resize();
-load();
-draw();
+window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
+canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+load(); draw();
 </script>
 </body>
 </html>
