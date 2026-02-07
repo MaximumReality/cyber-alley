@@ -214,9 +214,10 @@ class Player {
     }
 }
 
-const lori = new Player("lori", 50, ['lori-run.png', 'lori-run2.png']);
-const azul = new Player("azul", 140, ['azul-run.png', 'azul-run2.png']);
-const mochkil = new Player("mochkil", 230, ['mochkil-idle.png', 'mochkil-cheese.png']);
+// --- THE NEW SQUAD ---
+const lori = new Player("lori", 50, ['Lori-run.png', 'Lori-run2.png', 'Lori-run3.png']);
+const azul = new Player("azul", 140, ['Azul-run.png', 'Azul-run2.png', 'Azul-run3.png']);
+const mochkil = new Player("mochkil", 230, ['Mochkil.png', 'Mochkil2.png']);
 
 class GameObject {
     constructor(type) {
@@ -236,7 +237,7 @@ class GameObject {
         this.x -= gameSpeed;
         const loriJumpY = canvas.height - GROUND_Y_POS - CHAR_SIZE - jumpHeight;
         if (!this.collected && this.type === 'obstacle') {
-            const loriHitX = lori.x + 35;
+            const loriHitX = lori.x + 45;
             if (loriHitX < this.x + this.w - 15 && loriHitX + 30 > this.x + 15 && loriJumpY + 85 > this.y + 10 && loriJumpY + 15 < this.y + this.h) {
                 if (hasQuantumShield) { hasQuantumShield = false; snackStreak = 0; this.collected = true; shake = 20; document.getElementById('status').innerText = "SHIELD BROKEN!"; }
                 else { gameState = 'GAMEOVER'; music.pause(); }
