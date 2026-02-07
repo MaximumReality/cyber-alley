@@ -126,30 +126,49 @@ function updateMenu(file) {
 }
 
 class Player {
-    constructor(name, x, sprites) {
-        this.name = name; this.x = x;
-        this.sprites = sprites.map(file => { const img = new Image(); img.src = BASE_URL + file; return img; });
+    constructor(name, x, sprites, customW = 100, customH = 100) {
+        this.name = name; 
+        this.x = x;
+        this.w = customW; // Now uses the numbers you added!
+        this.h = customH;
+        this.sprites = sprites.map(file => { 
+            const img = new Image(); 
+            img.src = BASE_URL + file; 
+            img.onload = assetLoaded; // Keep the loading counter in sync
+            return img; 
+        });
         this.frameIndex = 0;
     }
     draw() {
         if (this.name !== 'mochkil' || this.frameIndex !== 0) {
             if (frame % 8 === 0) this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
         }
-        const drawY = canvas.height - GROUND_Y_POS - CHAR_SIZE - (this.name !== 'mochkil' ? jumpHeight : 0);
+        // Use this.h to make sure they all stand on the ground correctly
+        const drawY = canvas.height - GROUND_Y_POS - this.h - (this.name !== 'mochkil' ? jumpHeight : 0);
+        
         if (this.sprites[this.frameIndex].complete) {
             ctx.save();
-            if (this.name === 'azul' && hasQuantumShield) { ctx.shadowBlur = 20; ctx.shadowColor = "#0ff"; }
-            ctx.drawImage(this.sprites[this.frameIndex], this.x, drawY, CHAR_SIZE, CHAR_SIZE); 
+            if (this.name === 'azul' && hasQuantumShield) { 
+                ctx.shadowBlur = 20; 
+                ctx.shadowColor = "#0ff"; 
+            }
+            // Draw using the specific width and height you defined
+            ctx.drawImage(this.sprites[this.frameIndex], this.x, drawY, this.w, this.h); 
             ctx.restore();
         }
     }
 }
 
-// --- NEW SPRITES INITIALIZED HERE ---
-const lori = new Player("lori", 50, ['Lori-run.png', 'Lori-run2.png', 'Lori-run3.png']);
-const azul = new Player("azul", 140, ['Azul-run.png', 'Azul-run2.png', 'Azul-run3.png']);
-const mochkil = new Player("mochkil", 230, ['Mochkil.png', 'Mochkil2.png']);
 
+// --- NEW SPRITES INITIALIZED HERE ---
+/ Define Players
+const lori = new Player("lori", 50, ['Lori-run.png', 'Lori-run2.png', 'Lori-run3.png'], 90, 120);
+const azul = new Player("azul", 160, ['Azul-run.png', 'Azul-run2.png', 'Azul-run3.png'], 65, 65);
+const mochkil = new Player("mochkil", 250, ['Mochkil.png', 'Mochkil2.png'], 75, 75);
+
+// Initialize Loading
+totalAssets = toLoad.length + lori.sprites.length + azul.sprites.length + mochkil.sprites.length;
+toLoad.forEach(src => { assets[src] = new Image(); assets[src].onload = assetLoaded; assets[src].src = BASE_URL + src; });
 class GameObject {
     constructor(type) {
         this.type = type;
