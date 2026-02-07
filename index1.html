@@ -60,8 +60,8 @@ const biomes = {
         overlay: "rgba(43, 0, 43, 1)"
     },
     day: {
-        bg: 'gg-bg.png', // Swap this to your day sky file name when ready
-        buildings: ['building-a.png', 'building-b.png', 'building-c.png'], // Add your 88 building names here
+        bg: 'gg-bg.png', 
+        buildings: ['building-d.png', 'building-e.png', 'building-f.png'],
         overlay: "rgba(135, 206, 235, 1)"
     }
 };
@@ -79,6 +79,7 @@ let baseSpeed = 6;
 let gameSpeed = 0; 
 let frame = 0;
 let portalFrame = 0;
+let isTransitioning = false; // Prevents the portal/speed loop
 let isJumping = false;
 let jumpHeight = 0;
 let yVelocity = 0;
@@ -94,8 +95,7 @@ const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png',
 const snackPool = ['swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png', 'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 'fried-egg.png', 'green_apple.png', 'hotdog.png', 'marshmallows.png', 'milk_chocolate.png', 'pancake_stack.png', 'popcorn.png', 'red_apple.png', 'sandwich.png', 'strawberry-candy.png', 'watermelon-slice.png', 'tuna_can.png'];
 
 const assets = {};
-// Pre-load all common assets and initial biome
-const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'floor.png', 'snack-portal.png'];
+const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'building-d.png', 'building-e.png', 'building-f.png', 'floor.png', 'snack-portal.png'];
 toLoad.forEach(src => { assets[src] = new Image(); assets[src].src = BASE_URL + src; });
 
 function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
@@ -141,15 +141,11 @@ class GameObject {
         this.img = new Image(); this.img.src = BASE_URL + this.file;
         this.x = canvas.width + 100; this.collected = false;
 
-        if (this.file.includes('snack-portal')) {
-            this.w = 150; this.h = 200;
-        } else if (this.file.includes('truck')) {
-            this.w = 180; this.h = 100;
-        } else if (this.file.includes('smashed-can')) {
-            this.w = 40; this.h = 40;
-        } else {
-            this.w = 50; this.h = 50;
-        }
+        if (this.file.includes('snack-portal')) { this.w = 150; this.h = 200; }
+        else if (this.file.includes('truck')) { this.w = 180; this.h = 100; }
+        else if (this.file.includes('smashed-can')) { this.w = 40; this.h = 40; }
+        else { this.w = 50; this.h = 50; }
+
         this.y = canvas.height - GROUND_Y_POS - this.h;
         if (type === 'snack' && !this.file.includes('portal')) { this.y -= (Math.random() > 0.5 ? 0 : 160); }
     }
@@ -195,20 +191,23 @@ function restoreShield() {
     hasQuantumShield = true; snackStreak = 0;
     const statusEl = document.getElementById('status');
     statusEl.innerText = "QUANTUM SHIELD RESTORED";
-    statusEl.classList.remove('shield-ready');
-    void statusEl.offsetWidth;
-    statusEl.classList.add('shield-ready');
 }
 
 function handlePortalEntry() {
+    if (isTransitioning) return;
+    isTransitioning = true;
     shake = 50;
     currentBiome = 'day';
     portalFrame = frame;
     score += 500;
     document.getElementById('status').innerText = "SECTOR 2: THE BRIGHT SIDE";
-    // Optional: Increase difficulty
-    baseSpeed += 2;
+    
+    // Controlled speed boost
+    baseSpeed = 9; 
     gameSpeed = baseSpeed;
+    gameObjects = []; // Clear the "stampede"
+
+    setTimeout(() => { isTransitioning = false; }, 1200);
 }
 
 function handleJump() {
@@ -217,9 +216,10 @@ function handleJump() {
 }
 
 function resetGame() {
-    score = 0; snackStreak = 0; gameObjects = []; gameSpeed = baseSpeed; frame = 0; 
-    gameState = 'PLAYING'; currentBiome = 'night'; recentSnacks = []; jumpCount = 0; 
-    jumpHeight = 0; hasQuantumShield = true;
+    score = 0; snackStreak = 0; gameObjects = []; 
+    baseSpeed = 6; gameSpeed = baseSpeed;
+    currentBiome = 'night'; isTransitioning = false;
+    frame = 0; gameState = 'PLAYING'; recentSnacks = []; jumpCount = 0; jumpHeight = 0; hasQuantumShield = true;
     music.play().catch(() => {});
     document.getElementById('recentMenu').innerHTML = '';
     document.getElementById('status').innerText = "SYSTEMS ONLINE";
@@ -266,7 +266,7 @@ function animate() {
 
     if (gameState === 'PLAYING') {
         frame++;
-        if (score >= 2000 && !gameObjects.some(obj => obj.file.includes('snack-portal'))) {
+        if (score >= 2000 && !isTransitioning && !gameObjects.some(obj => obj.file.includes('snack-portal'))) {
             let portal = new GameObject('snack');
             portal.file = 'snack-portal.png';
             portal.img.src = BASE_URL + portal.file;
@@ -283,9 +283,12 @@ function animate() {
 
     lori.draw(); azul.draw(); mochkil.draw();
 
-    if (currentBiome === 'day' && frame < portalFrame + 60) {
-        ctx.fillStyle = `rgba(255, 255, 255, ${1 - (frame - portalFrame)/60})`;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (isTransitioning) {
+        let alpha = 1 - (frame - portalFrame) / 60;
+        if (alpha > 0) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
     }
     
     ctx.restore();
@@ -300,6 +303,7 @@ function animate() {
 }
 animate();
 </script>
+
 
 
 </body>
