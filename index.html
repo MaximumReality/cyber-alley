@@ -168,6 +168,13 @@ let recentSnacks = [];
 let gameObjects = [];
 let shake = 0;
 let particles = []; // This holds our ✨ sparks
+// --- 🌌 STARFIELD DATA ---
+const stars = Array.from({ length: 80 }, () => ({
+    x: Math.random() * 2000, // Wide range for scrolling
+    y: Math.random() * 400,  // Keep them in the sky
+    size: Math.random() * 2,
+    opacity: Math.random()
+}));
 
 // --- RESTORED FULL ASSET POOLS ---
 const obstaclePool = [
@@ -316,9 +323,24 @@ function handleJump() {
 window.addEventListener('mousedown', handleJump);
 window.addEventListener('touchstart', (e) => { if (e.target.id === 'gameCanvas') { e.preventDefault(); handleJump(); } }, { passive: false });
 
+// --- 🏞️ FIXED DRAW BACKGROUND ---
 function drawBackground() {
+    // 1. Sky Color
     ctx.fillStyle = biomes[currentBiome].overlay; 
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 2. Twinkling Stars
+    ctx.fillStyle = "#fff";
+    stars.forEach(s => {
+        let twinkle = s.opacity * Math.abs(Math.sin(frame / 30 + s.x));
+        ctx.globalAlpha = twinkle;
+        let starX = (s.x - (frame * 0.1)) % canvas.width;
+        if (starX < 0) starX += canvas.width;
+        ctx.fillRect(starX, s.y, s.size, s.size);
+    });
+    ctx.globalAlpha = 1;
+
+    // 3. Buildings
     const b = biomes[currentBiome];
     const layers = [
         { src: b.bg, s: 0.2, op: 0.3, h: canvas.height },
@@ -334,19 +356,23 @@ function drawBackground() {
             ctx.drawImage(assets[l.src], xPos + canvas.width, canvas.height - l.h - GROUND_Y_POS, canvas.width, l.h);
         }
     });
+
+    // 4. Floor
     ctx.globalAlpha = 1;
     if (assets['floor.png'] && assets['floor.png'].complete) {
         for (let i = 0; i < (canvas.width / 50) + 2; i++) {
             ctx.drawImage(assets['floor.png'], (-(frame * gameSpeed) % 50) + (i * 50), canvas.height - GROUND_Y_POS, 50, 100);
         }
     }
-}
+} // <--- This bracket closes drawBackground correctly
+
+// --- ✨ THE MISSING BURST FUNCTION ---
 function createBurst(x, y, color) {
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 12; i++) {
         particles.push({
             x: x, y: y,
-            vX: (Math.random() - 0.5) * 10,
-            vY: (Math.random() - 0.5) * 10,
+            vX: (Math.random() - 0.5) * 12,
+            vY: (Math.random() - 0.5) * 12,
             life: 1.0,
             color: color
         });
