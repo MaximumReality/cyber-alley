@@ -35,6 +35,30 @@
             100% { text-shadow: 0 0 5px #0ff; }
         }
         .shield-ready { animation: glitch-glow 0.5s ease-in-out 3; }
+        #loader-container {
+    position: absolute;
+    top: 60%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 250px;
+    height: 10px;
+    border: 1px solid #0ff;
+    padding: 2px;
+    z-index: 100;
+}
+
+#loader-bar {
+    width: 0%;
+    height: 100%;
+    background: #0ff;
+    box-shadow: 0 0 15px #0ff;
+    transition: width 0.2s ease-out;
+}
+
+.hidden {
+    display: none !important;
+}
+
     </style>
 </head>
 <body>
@@ -52,6 +76,9 @@
         <button id="muteBtn" onclick="toggleMute()" title="Mute">🔊</button>
         <button id="pauseBtn" onclick="togglePause()" title="Pause">⏸️</button>
     </div>
+<div id="loader-container">
+    <div id="loader-bar"></div>
+</div>
 
     <canvas id="gameCanvas"></canvas>
 
@@ -82,10 +109,21 @@ let assetsLoaded = 0;
 let totalAssets = 0;
 function assetLoaded() {
     assetsLoaded++;
+    const progress = (assetsLoaded / totalAssets) * 100;
+    
+    // Update the visual bar
+    const bar = document.getElementById('loader-bar');
+    if (bar) bar.style.width = progress + "%";
+
     if (assetsLoaded >= totalAssets) {
         document.getElementById('status').innerText = "SYSTEM ONLINE: TAP TO START";
+        // Hide the loader bar once finished
+        document.getElementById('loader-container').classList.add('hidden');
+    } else {
+        document.getElementById('status').innerText = `BOOTING: ${Math.round(progress)}%`;
     }
 }
+
 
 const biomes = {
     night: { bg: 'gg-bg.png', buildings: ['building-a.png', 'building-b.png', 'building-c.png'], overlay: "rgba(43, 0, 43, 1)" },
