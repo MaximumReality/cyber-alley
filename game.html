@@ -56,43 +56,35 @@
     <canvas id="gameCanvas"></canvas>
 
 <script>
+// --- CORE SETUP ---
 let isPaused = false;
 let isMuted = false;
 const music = document.getElementById('bgMusic');
-
-function toggleMute() {
-    isMuted = !isMuted;
-    music.muted = isMuted;
-    document.getElementById('muteBtn').innerText = isMuted ? "🔇" : "🔊";
-}
-
-function togglePause() {
-    if (gameState !== 'PLAYING') return;
-    isPaused = !isPaused;
-    document.getElementById('pauseBtn').innerText = isPaused ? "▶️" : "⏸️";
-    if (isPaused) music.pause(); else music.play().catch(() => {});
-}
-
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
 
+// --- LOADING LOGIC ---
 let assetsLoaded = 0;
 let totalAssets = 0;
+const assets = {}; // Fixed: Re-added the assets object
 
 function assetLoaded() {
     assetsLoaded++;
     const progress = (assetsLoaded / totalAssets) * 100;
     const bar = document.getElementById('loader-bar');
     if (bar) bar.style.width = progress + "%";
+    
     if (assetsLoaded >= totalAssets) {
         document.getElementById('status').innerText = "SYSTEM ONLINE: TAP TO START";
-        document.getElementById('loader-container').classList.add('hidden');
+        const loader = document.getElementById('loader-container');
+        if (loader) loader.classList.add('hidden');
     } else {
         document.getElementById('status').innerText = `BOOTING: ${Math.round(progress)}%`;
     }
 }
 
+// --- GAME CONSTANTS ---
 const biomes = {
     night: { bg: 'gg-bg.png', buildings: ['building-a.png', 'building-b.png', 'building-c.png'], overlay: "rgba(43, 0, 43, 1)" },
     day: { bg: 'gg-bg.png', buildings: ['building-d.png', 'building-e.png', 'building-f.png'], overlay: "rgba(135, 206, 235, 1)" }
@@ -102,6 +94,7 @@ const CHAR_SIZE = 100;
 const GROUND_Y_POS = 120; 
 const gravity = 1.2;
 
+// --- STATE VARIABLES ---
 let currentBiome = 'night';
 let gameState = 'START'; 
 let score = 0;
@@ -121,39 +114,14 @@ let gameObjects = [];
 let shake = 0;
 let particles = [];
 
+// --- POOLS (MATCHED TO REPO) ---
 const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 'fish-bones.png', 'smashed-can.png', 'smashed-juice-box.png', 'smashed-soda-can.png', 'detergent.png', 'receipt.png', 'scrub_brush.png', 'toilet_paper.png', 'hand_sanitiser.png', 'kitchen_soap.png', 'frying-pan.png', 'basket_metal.png'];
-const obstaclePool = [
-    'dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 
-    'overflowing-trashcan.png', 'fish-bones.png', 'smashed-can.png', 
-    'smashed-juice-box.png', 'smashed-soda-can.png', 'detergent.png', 
-    'receipt.png', 'scrub_brush.png', 'toilet_paper.png', 
-    'hand_sanitiser.png', 'kitchen_soap.png', 'frying-pan.png',
-    'basket_metal.png'
-];
 
-const snackPool = [
-    'credit_card_1.png', 'swiss-cheese.png', 'pizza-slice.png', 
-    'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 
-    'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png', 
-    'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 
-    'fried-egg.png', 'green_apple.png', 'hotdog.png', 'marshmallows.png', 
-    'milk_chocolate.png', 'pancake_stack.png', 'popcorn.png', 
-    'red_apple.png', 'sandwich.png', 'strawberry-candy.png', 
-    'watermelon-slice.png', 'tuna_can.png', 'ketchup.png',
-    'soft_drink_blue.png', 'milk_gallon.png', 'orange_juice.png'
-];
+const snackPool = ['credit_card_1.png', 'swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png', 'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 'fried-egg.png', 'green_apple.png', 'hotdog.png', 'marshmallows.png', 'milk_chocolate.png', 'pancake_stack.png', 'popcorn.png', 'red_apple.png', 'sandwich.png', 'strawberry-candy.png', 'watermelon-slice.png', 'tuna_can.png', 'ketchup.png', 'soft_drink_blue.png', 'milk_gallon.png', 'orange_juice.png'];
 
-const toLoad = [
-    'gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 
-    'building-d.png', 'building-e.png', 'building-f.png', 
-    'floor.png', 'snack-portal.png'
-];
+const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'building-d.png', 'building-e.png', 'building-f.png', 'floor.png', 'snack-portal.png'];
 
-
-function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-window.addEventListener('resize', resize);
-resize();
-
+// --- CLASSES ---
 class Player {
     constructor(name, x, sprites, w, h) {
         this.name = name; this.x = x; this.w = w; this.h = h;
@@ -168,7 +136,7 @@ class Player {
             if (frame % 8 === 0) this.frameIndex = (this.frameIndex + 1) % this.sprites.length;
         }
         const drawY = canvas.height - GROUND_Y_POS - CHAR_SIZE - (this.name !== 'mochkil' ? jumpHeight : 0);
-        if (this.sprites[this.frameIndex].complete) {
+        if (this.sprites[this.frameIndex] && this.sprites[this.frameIndex].complete) {
             ctx.save();
             if (this.name === 'azul' && hasQuantumShield) { ctx.shadowBlur = 15; ctx.shadowColor = "#0ff"; }
             ctx.drawImage(this.sprites[this.frameIndex], this.x, drawY, CHAR_SIZE, CHAR_SIZE); 
@@ -177,10 +145,12 @@ class Player {
     }
 }
 
+// Define Players
 const lori = new Player("lori", 50, ['Lori-run.png', 'Lori-run2.png', 'Lori-run3.png'], 60, 80);
 const azul = new Player("azul", 140, ['Azul-run.png', 'Azul-run2.png', 'Azul-run3.png'], 60, 80);
 const mochkil = new Player("mochkil", 230, ['Mochkil.png', 'Mochkil2.png'], 70, 70);
 
+// Initialize Loading
 totalAssets = toLoad.length + lori.sprites.length + azul.sprites.length + mochkil.sprites.length;
 toLoad.forEach(src => { assets[src] = new Image(); assets[src].onload = assetLoaded; assets[src].src = BASE_URL + src; });
 
@@ -195,18 +165,18 @@ class GameObject {
         this.collected = false;
         this.isValid = true;
 
-        // If image fails to load, mark as invalid so it doesn't hit the player
         this.img.onerror = () => { this.isValid = false; };
 
         if (this.file.includes('snack-portal')) { this.w = 150; this.h = 200; }
         else if (this.file.includes('truck')) { this.w = 180; this.h = 100; }
         else if (this.file.includes('dumpster')) { this.w = 120; this.h = 90; }
         else { this.w = 50; this.h = 50; }
+        
         this.y = canvas.height - GROUND_Y_POS - this.h;
         if (type === 'snack' && !this.file.includes('portal')) { this.y -= (Math.random() > 0.5 ? 0 : 160); }
     }
     update() {
-        if (!this.isValid) return; // Skip if image is missing
+        if (!this.isValid) return;
         this.x -= gameSpeed;
         const loriJumpY = canvas.height - GROUND_Y_POS - CHAR_SIZE - jumpHeight;
         
@@ -246,6 +216,12 @@ class GameObject {
     }
 }
 
+// --- FUNCTIONS ---
+function toggleMute() { isMuted = !isMuted; music.muted = isMuted; document.getElementById('muteBtn').innerText = isMuted ? "🔇" : "🔊"; }
+function togglePause() { if (gameState !== 'PLAYING') return; isPaused = !isPaused; document.getElementById('pauseBtn').innerText = isPaused ? "▶️" : "⏸️"; if (isPaused) music.pause(); else music.play().catch(() => {}); }
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize);
+resize();
 
 function handlePortalEntry() {
     if (isTransitioning) return;
@@ -282,7 +258,12 @@ function updateMenu(file) {
 function drawBackground() {
     ctx.fillStyle = biomes[currentBiome].overlay; ctx.fillRect(0, 0, canvas.width, canvas.height);
     const b = biomes[currentBiome];
-    const layers = [{ src: b.bg, s: 0.2, op: 0.3, h: canvas.height }, { src: b.buildings[2], s: 0.8, op: 0.5, h: canvas.height * 0.8 }, { src: b.buildings[1], s: 1.5, op: 0.7, h: canvas.height * 0.6 }, { src: b.buildings[0], s: 2.5, op: 0.9, h: canvas.height * 0.4 }];
+    const layers = [
+        { src: b.bg, s: 0.2, op: 0.3, h: canvas.height }, 
+        { src: b.buildings[2], s: 0.8, op: 0.5, h: canvas.height * 0.8 }, 
+        { src: b.buildings[1], s: 1.5, op: 0.7, h: canvas.height * 0.6 }, 
+        { src: b.buildings[0], s: 2.5, op: 0.9, h: canvas.height * 0.4 }
+    ];
     layers.forEach(l => {
         if (assets[l.src] && assets[l.src].complete) {
             let xPos = -(frame * l.s) % canvas.width;
@@ -311,11 +292,13 @@ function animate() {
     if (shake > 0) { ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake); shake *= 0.9; if (shake < 0.5) shake = 0; }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackground();
+    
     particles.forEach((p, i) => {
         p.x += p.vX; p.y += p.vY; p.life -= 0.02;
         ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 4, 4);
         if (p.life <= 0) particles.splice(i, 1);
     });
+    
     ctx.globalAlpha = 1;
     if (gameState === 'PLAYING') {
         frame++;
@@ -328,12 +311,15 @@ function animate() {
         gameObjects.forEach((obj, i) => { obj.update(); if (obj.x < -300) gameObjects.splice(i, 1); });
         document.getElementById('scoreDisplay').innerText = `SCORE: ${score}`;
     }
+    
     lori.draw(); azul.draw(); mochkil.draw();
+    
     if (isTransitioning) {
         let alpha = 1 - (frame - portalFrame) / 60;
         if (alpha > 0) { ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
     }
     ctx.restore();
+    
     if (gameState !== 'PLAYING') {
         ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0,0,canvas.width,canvas.height);
         ctx.fillStyle = "#0ff"; ctx.textAlign = "center"; ctx.font = "24px Courier";
