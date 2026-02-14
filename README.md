@@ -2,7 +2,7 @@
 
 **Maximum Reality: Cyber Alley** is a neon-drenched, cyberpunk-inspired endless runner game. Players dodge obstacles, collect snacks, and navigate through dynamic biomes while enjoying immersive synth-industrial background music.
 
-![Gameplay Screenshot](https://maximumreality.github.io/cyber-alley/gg-bg.png)
+![Gameplay Screenshot](https://maximumreality.github.io/cyber-alley/building-e.png)
 
 ---
 
