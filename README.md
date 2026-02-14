@@ -42,8 +42,9 @@
    ```bash
    git clone https://github.com/maximumreality/cyber-alley.git
    https://maximumreality.github.io/match/
-   📂 File 
-   cyber-alley/
+
+📂 File structure:
+cyber-alley/
 │
 ├─ index.html          # Main game HTML
 ├─ css/
