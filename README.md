@@ -43,9 +43,9 @@
    git clone https://github.com/maximumreality/cyber-alley.git
    https://maximumreality.github.io/match/
 
-#📂 File structure:
-cyber-alley/
-│
+##📂 File structure:
+
+|-cyber-alley/
 ├─ index.html          # Main game HTML
 ├─ css/
 │   └─ styles.css      # Optional additional styling
