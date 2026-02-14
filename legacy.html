@@ -41,6 +41,9 @@ const ctx = canvas.getContext('2d');
 const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
 const music = document.getElementById('bgMusic');
 
+// --- 1. PERSISTENT DATA & STATE ---
+let bestScore = localStorage.getItem('cyberAlleyBest') || 0;
+let lastBiomeChangeScore = 0; 
 let gameState = 'START', currentBiome = 'night', score = 0, frame = 0;
 let isPaused = false, isMuted = false, isTransitioning = false, portalFrame = 0;
 let baseSpeed = 6, gameSpeed = 0, shake = 0, hasQuantumShield = true, snackStreak = 0;
@@ -61,6 +64,7 @@ toLoad.forEach(src => { assets[src] = new Image(); assets[src].src = BASE_URL + 
 
 const stars = Array.from({ length: 80 }, () => ({ x: Math.random() * 2000, y: Math.random() * 400, size: Math.random() * 2, opacity: Math.random() }));
 
+// --- 2. CLASSES ---
 class Player {
     constructor(name, x, sprites, w, h) {
         this.name = name; this.x = x; this.w = w; this.h = h;
@@ -125,12 +129,28 @@ class GameObject {
     }
 }
 
-function handlePortalEntry() { isTransitioning = true; shake = 50; currentBiome = 'day'; portalFrame = frame; score += 500; gameObjects = []; baseSpeed = 9; gameSpeed = baseSpeed; document.getElementById('status').innerText = "SECTOR 2: THE BRIGHT SIDE"; setTimeout(() => isTransitioning = false, 2000); }
+// --- 3. CORE LOGIC ---
+function handlePortalEntry() { 
+    isTransitioning = true; shake = 50; currentBiome = 'day'; portalFrame = frame; 
+    score += 500; gameObjects = []; baseSpeed = 9; gameSpeed = baseSpeed; 
+    lastBiomeChangeScore = score; // Lock the biome
+    document.getElementById('status').innerText = "SECTOR 2: THE BRIGHT SIDE"; 
+    setTimeout(() => isTransitioning = false, 2000); 
+}
+
+function resetGame() { 
+    score = 0; snackStreak = 0; gameObjects = []; baseSpeed = 6; gameSpeed = baseSpeed; 
+    currentBiome = 'night'; isTransitioning = false; frame = 0; gameState = 'PLAYING'; 
+    recentSnacks = []; jumpCount = 0; jumpHeight = 0; hasQuantumShield = true;
+    lastBiomeChangeScore = 0; 
+    music.play().catch(()=>{}); 
+    document.getElementById('recentMenu').innerHTML = ''; 
+}
+
 function updateMenu(f) { const m = document.getElementById('recentMenu'); recentSnacks.unshift(f); if(recentSnacks.length > 5) recentSnacks.pop(); m.innerHTML = recentSnacks.map(s => `<img src="${BASE_URL+s}">`).join(''); }
 function toggleMute() { isMuted = !isMuted; music.muted = isMuted; document.getElementById('muteBtn').innerText = isMuted ? "🔇" : "🔊"; }
 function togglePause() { if (gameState !== 'PLAYING') return; isPaused = !isPaused; document.getElementById('pauseBtn').innerText = isPaused ? "▶️" : "⏸️"; isPaused ? music.pause() : music.play().catch(()=>{}); }
 function handleJump() { if (gameState !== 'PLAYING') resetGame(); else if (jumpCount < 2) { isJumping = true; yVelocity = -20; jumpCount++; } }
-function resetGame() { score = 0; snackStreak = 0; gameObjects = []; baseSpeed = 6; gameSpeed = baseSpeed; currentBiome = 'night'; isTransitioning = false; frame = 0; gameState = 'PLAYING'; recentSnacks = []; jumpCount = 0; jumpHeight = 0; hasQuantumShield = true; music.play().catch(()=>{}); document.getElementById('recentMenu').innerHTML = ''; }
 function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 window.addEventListener('resize', resize); resize();
 window.addEventListener('mousedown', handleJump);
@@ -151,7 +171,10 @@ function drawBackground() {
 function animate() {
     if (isPaused) { requestAnimationFrame(animate); return; }
     
-    // 1. FILTER LOGIC
+    // UI Update
+    document.getElementById('scoreDisplay').innerText = `SCORE: ${score} | BEST: ${bestScore}`;
+
+    // Filters
     let filters = [];
     if (currentBiome === 'night') filters.push('sepia(100%) saturate(300%) brightness(80%) hue-rotate(100deg) contrast(120%)');
     if (!hasQuantumShield && gameState === 'PLAYING') filters.push(`hue-rotate(${Math.sin(frame*0.5)*20}deg)`);
@@ -161,17 +184,35 @@ function animate() {
     if (shake > 0) { ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake); shake *= 0.9; }
     
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    drawBackground(); // DRAW BACKGROUND FIRST
+    drawBackground();
 
     if (gameState === 'PLAYING') {
         frame++;
-        if (currentBiome === 'day' && score > 5000 && !isTransitioning) { currentBiome = 'night'; gameSpeed = 6; document.getElementById('status').innerText = "RE-ENTERING THE ALLEY"; }
+        
+        // High Score Persistence
+        if (score > bestScore) {
+            bestScore = score;
+            localStorage.setItem('cyberAlleyBest', bestScore);
+        }
+
+        // BIOME SWITCHING (Safety Lock: Must wait 1000pts between flips)
+        if (score - lastBiomeChangeScore > 1000) {
+            if (currentBiome === 'day' && score % 5000 > 4500 && !isTransitioning) {
+                currentBiome = 'night';
+                lastBiomeChangeScore = score;
+                baseSpeed = 6; gameSpeed = baseSpeed;
+                document.getElementById('status').innerText = "RE-ENTERING THE ALLEY";
+            }
+        }
+
         const pExists = gameObjects.some(o => o.file.includes('portal'));
-        if (score >= 2000 && currentBiome === 'night' && !pExists && !isTransitioning) { let p = new GameObject('snack'); p.file = 'snack-portal.png'; p.img.src = BASE_URL+p.file; gameObjects.push(p); }
+        if (currentBiome === 'night' && score % 5000 > 2000 && !pExists && !isTransitioning) { 
+            let p = new GameObject('snack'); p.file = 'snack-portal.png'; p.img.src = BASE_URL+p.file; gameObjects.push(p); 
+        }
+        
         if (frame % 80 === 0 && !pExists) gameObjects.push(new GameObject(Math.random()>0.4?'obstacle':'snack'));
         if (isJumping) { jumpHeight -= yVelocity; yVelocity += 1.2; if (jumpHeight <= 0) { jumpHeight = 0; isJumping = false; jumpCount = 0; } }
         gameObjects.forEach((o, i) => { o.update(); if (o.x < -300) gameObjects.splice(i,1); });
-        document.getElementById('scoreDisplay').innerText = `SCORE: ${score}`;
     }
 
     particles.forEach((p, i) => { p.x += p.vX; p.y += p.vY; p.life -= 0.02; ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 4, 4); if (p.life <= 0) particles.splice(i,1); });
@@ -189,5 +230,6 @@ function animate() {
 }
 animate();
 </script>
+
 </body>
 </html>
