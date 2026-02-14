@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>!function(){const e=["maximumreality.github.io","maximumreality.xyz"];e.includes(window.location.hostname)||window.location.hostname.includes("localhost")||(document.documentElement.innerHTML='<body style="background:#000;color:#f0f;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-family:monospace;margin:0;"><h1 style="text-shadow:2px 2px #0ff">ACCESS DENIED</h1><p style="color:#0ff">[ REALITY COMPROMISED ]</p><p>Locked to MaximumReality.xyz</p><p style="font-size:.8rem;margin-top:20px">Ticket #404-POO: Unauthorized Mirror.</p></body>',window.stop())}();</script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Maximum Reality: Cyber Alley</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', monospace; position: fixed; width: 100%; height: 100%; -webkit-user-select: none; user-select: none; }
+        #gameCanvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; touch-action: none; transition: filter 0.3s ease; }
+        .ui-layer { position: absolute; top: 0; width: 100%; color: #0ff; text-shadow: 0 0 10px #0ff; pointer-events: none; padding: 20px; z-index: 5; }
+        #recentMenu { margin-top: 50px; display: flex; gap: 10px; height: 40px; }
+        #recentMenu img { width: 40px; height: 40px; background: rgba(0,255,255,0.1); border-radius: 5px; border: 1px solid #0ff; }
+        .game-controls { position: absolute; top: 20px; right: 20px; display: flex; gap: 15px; z-index: 100; }
+        .game-controls button { background: rgba(0, 255, 255, 0.05); border: 1px solid rgba(0, 255, 255, 0.3); color: #0ff; padding: 5px 10px; border-radius: 3px; backdrop-filter: blur(2px); cursor: pointer; pointer-events: auto; }
+        .crt-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03)); background-size: 100% 4px, 3px 100%; pointer-events: none; z-index: 10; }
+    </style>
+</head>
+<body>
+    <audio id="bgMusic" loop><source src="https://maximumreality.github.io/cyber-alley/futuristic-cyberpunk-industrial-music.mp3" type="audio/mpeg"></audio>
+    <div class="crt-overlay"></div>
+    <div class="ui-layer">
+        <div id="scoreDisplay">SCORE: 0</div>
+        <div id="status">SNACK ATTACK INITIALIZED</div>
+        <div id="recentMenu"></div>
+    </div>
+    <div class="game-controls">
+        <button onclick="window.location.href='https://maximumreality.xyz'">🏠</button>
+        <button id="muteBtn" onclick="toggleMute()">🔊</button>
+        <button id="pauseBtn" onclick="togglePause()">⏸️</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const BASE_URL = "https://maximumreality.github.io/cyber-alley/";
+const music = document.getElementById('bgMusic');
+
+// --- GAME STATE ---
+let gameState = 'START', currentBiome = 'night', score = 0, frame = 0;
+let isPaused = false, isMuted = false, isTransitioning = false, portalFrame = 0;
+let baseSpeed = 6, gameSpeed = 0, shake = 0, hasQuantumShield = true, snackStreak = 0;
+let jumpHeight = 0, yVelocity = 0, jumpCount = 0, isJumping = false;
+let gameObjects = [], particles = [], recentSnacks = [];
+
+const biomes = {
+    night: { bg: 'gg-bg.png', buildings: ['building-a.png', 'building-b.png', 'building-c.png'], overlay: "rgba(43, 0, 43, 1)" },
+    day: { bg: 'gg-bg.png', buildings: ['building-d.png', 'building-e.png', 'building-f.png'], overlay: "rgba(135, 206, 235, 1)" }
+};
+
+const obstaclePool = ['dumpster.png', 'metal_trashcan.png', 'garbage-truck.png', 'overflowing-trashcan.png', 'fish-bones.png', 'smashed-can.png', 'smashed-juice-box.png', 'smashed-soda-can.png', 'detergent.png', 'receipt.png', 'scrub_brush.png', 'toilet_paper.png', 'hand_sanitiser.png', 'kitchen_soap.png', 'frying-pan.png'];
+const snackPool = ['credit_card_1.png', 'swiss-cheese.png', 'pizza-slice.png', 'pink-donut.png', 'cheeseburger.png', 'roast-chicken.png', 'cupcake.png', 'banana.png', 'ham.png', 'bread-slice.png', 'bubble_gum.png', 'chicken_leg.png', 'chips.png', 'cookies.png', 'fried-egg.png', 'green_apple.png', 'hotdog.png', 'marshmallows.png', 'milk_chocolate.png', 'pancake_stack.png', 'popcorn.png', 'red_apple.png', 'sandwich.png', 'strawberry-candy.png', 'watermelon-slice.png', 'tuna_can.png'];
+
+const assets = {};
+const toLoad = ['gg-bg.png', 'building-a.png', 'building-b.png', 'building-c.png', 'building-d.png', 'building-e.png', 'building-f.png', 'floor.png', 'snack-portal.png'];
+toLoad.forEach(src => { assets[src] = new Image(); assets[src].src = BASE_URL + src; });
+
+const stars = Array.from({ length: 80 }, () => ({ x: Math.random() * 2000, y: Math.random() * 400, size: Math.random() * 2, opacity: Math.random() }));
+
+class Player {
+    constructor(name, x, sprites, w, h) {
+        this.name = name; this.x = x; this.w = w; this.h = h;
+        this.sprites = sprites.map(file => { const img = new Image(); img.src = BASE_URL + file; return img; });
+        this.frameIndex = 0;
+    }
+    draw() {
+        if (this.name !== 'mochkil' || this.frameIndex !== 0) { if (frame % 8 === 0) this.frameIndex = (this.frameIndex + 1) % this.sprites.length; }
+        const drawY = canvas.height - 120 - this.h - (this.name !== 'mochkil' ? jumpHeight : 0);
+        if (this.sprites[this.frameIndex].complete) {
+            ctx.save();
+            if (this.name === 'azul' && hasQuantumShield) { ctx.shadowBlur = 20; ctx.shadowColor = "#0ff"; }
+            ctx.drawImage(this.sprites[this.frameIndex], this.x, drawY, this.w, this.h);
+            ctx.restore();
+        }
+    }
+}
+
+const lori = new Player("lori", 50, ['Lori-run.png', 'Lori-run2.png', 'Lori-run3.png'], 90, 120);
+const azul = new Player("azul", 160, ['Azul-run.png', 'Azul-run2.png', 'Azul-run3.png'], 65, 65);
+const mochkil = new Player("mochkil", 250, ['Mochkil.png', 'Mochkil2.png'], 75, 75);
+
+class GameObject {
+    constructor(type) {
+        this.type = type;
+        const pool = type === 'obstacle' ? obstaclePool : snackPool;
+        this.file = pool[Math.floor(Math.random() * pool.length)];
+        this.img = new Image(); this.img.src = BASE_URL + this.file;
+        this.x = canvas.width + 100; this.collected = false;
+        if (this.file.includes('portal')) { this.w = 150; this.h = 200; }
+        else if (this.file.includes('truck')) { this.w = 180; this.h = 100; }
+        else if (this.file.includes('dumpster')) { this.w = 120; this.h = 90; }
+        else { this.w = 50; this.h = 50; }
+        this.y = canvas.height - 120 - this.h;
+        if (type === 'snack' && !this.file.includes('portal')) this.y -= (Math.random() > 0.5 ? 0 : 160);
+    }
+    update() {
+        this.x -= gameSpeed;
+        if (!this.collected) {
+            const charY = canvas.height - 120 - 100 - jumpHeight;
+            if (this.type === 'obstacle') {
+                if (lori.x + 45 < this.x + this.w - 15 && lori.x + 75 > this.x + 15 && charY + 85 > this.y + 10 && charY + 15 < this.y + this.h) {
+                    if (hasQuantumShield) { hasQuantumShield = false; snackStreak = 0; this.collected = true; shake = 20; document.getElementById('status').innerText = "SHIELD BROKEN!"; }
+                    else { gameState = 'GAMEOVER'; music.pause(); }
+                }
+            } else {
+                [lori, azul, mochkil].forEach(p => {
+                    let py = p.name === 'mochkil' ? canvas.height - 120 - p.h : charY;
+                    if (p.x < this.x + this.w && p.x + p.w > this.x && py < this.y + this.h && py + p.h > this.y) {
+                        this.collected = true; createBurst(this.x, this.y, this.file.includes('credit') ? '#ffd700' : '#0ff');
+                        if (this.file.includes('portal')) handlePortalEntry();
+                        else {
+                            score += this.file.includes('credit') ? 500 : 150; updateMenu(this.file);
+                            if (!hasQuantumShield) { snackStreak++; if (snackStreak >= 5) { hasQuantumShield = true; snackStreak = 0; document.getElementById('status').innerText = "SHIELD RESTORED"; } }
+                            mochkil.frameIndex = 1; setTimeout(() => { if(gameState==='PLAYING') mochkil.frameIndex = 0; }, 600);
+                        }
+                    }
+                });
+            }
+        }
+        if (this.img.complete && !this.collected) ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
+    }
+}
+
+function handlePortalEntry() { isTransitioning = true; shake = 50; currentBiome = 'day'; portalFrame = frame; score += 500; gameObjects = []; baseSpeed = 9; gameSpeed = baseSpeed; document.getElementById('status').innerText = "SECTOR 2: THE BRIGHT SIDE"; setTimeout(() => isTransitioning = false, 2000); }
+function updateMenu(f) { const m = document.getElementById('recentMenu'); recentSnacks.unshift(f); if(recentSnacks.length > 5) recentSnacks.pop(); m.innerHTML = recentSnacks.map(s => `<img src="${BASE_URL+s}">`).join(''); }
+function toggleMute() { isMuted = !isMuted; music.muted = isMuted; document.getElementById('muteBtn').innerText = isMuted ? "🔇" : "🔊"; }
+function togglePause() { if (gameState !== 'PLAYING') return; isPaused = !isPaused; document.getElementById('pauseBtn').innerText = isPaused ? "▶️" : "⏸️"; isPaused ? music.pause() : music.play().catch(()=>{}); }
+function handleJump() { if (gameState !== 'PLAYING') resetGame(); else if (jumpCount < 2) { isJumping = true; yVelocity = -20; jumpCount++; } }
+function resetGame() { score = 0; snackStreak = 0; gameObjects = []; baseSpeed = 6; gameSpeed = baseSpeed; currentBiome = 'night'; isTransitioning = false; frame = 0; gameState = 'PLAYING'; recentSnacks = []; jumpCount = 0; jumpHeight = 0; hasQuantumShield = true; music.play().catch(()=>{}); document.getElementById('recentMenu').innerHTML = ''; }
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize); resize();
+window.addEventListener('mousedown', handleJump);
+window.addEventListener('touchstart', (e) => { if (e.target.id === 'gameCanvas') { e.preventDefault(); handleJump(); } }, { passive: false });
+
+function createBurst(x, y, color) { for (let i = 0; i < 12; i++) particles.push({ x, y, vX: (Math.random()-0.5)*12, vY: (Math.random()-0.5)*12, life: 1, color }); }
+
+function drawBackground() {
+    ctx.fillStyle = biomes[currentBiome].overlay; ctx.fillRect(0,0,canvas.width,canvas.height);
+    stars.forEach(s => { ctx.globalAlpha = s.opacity * Math.abs(Math.sin(frame/30 + s.x)); let sx = (s.x - (frame*0.1)) % canvas.width; if (sx<0) sx+=canvas.width; ctx.fillStyle="#fff"; ctx.fillRect(sx, s.y, s.size, s.size); });
+    ctx.globalAlpha = 1;
+    const b = biomes[currentBiome];
+    const layers = [{src: b.bg, s: 0.2, op: 0.3, h: canvas.height}, {src: b.buildings[2], s: 0.8, op: 0.5, h: canvas.height*0.8}, {src: b.buildings[1], s: 1.5, op: 0.7, h: canvas.height*0.6}, {src: b.buildings[0], s: 2.5, op: 0.9, h: canvas.height*0.4}];
+    layers.forEach(l => { if (assets[l.src]?.complete) { let x = -(frame*l.s)%canvas.width; ctx.globalAlpha=l.op; ctx.drawImage(assets[l.src], x, canvas.height-l.h-120, canvas.width, l.h); ctx.drawImage(assets[l.src], x+canvas.width, canvas.height-l.h-120, canvas.width, l.h); } });
+    ctx.globalAlpha = 1;
+    if (assets['floor.png']?.complete) for (let i=0; i<(canvas.width/50)+2; i++) ctx.drawImage(assets['floor.png'], (-(frame*gameSpeed)%50)+(i*50), canvas.height-120, 50, 100);
+}
+
+function animate() {
+    if (isPaused) { requestAnimationFrame(animate); return; }
+    ctx.save();
+    
+    // Legacy & Glitch Filters
+    let filters = [];
+    if (currentBiome === 'night') filters.push('sepia(100%) saturate(300%) brightness(80%) hue-rotate(100deg) contrast(120%)');
+    if (!hasQuantumShield && gameState === 'PLAYING') filters.push(`hue-rotate(${Math.sin(frame*0.5)*20}deg)`);
+    canvas.style.filter = filters.join(' ');
+
+    if (shake > 0) { ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake); shake *= 0.9; }
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    
+    if (gameState === 'PLAYING') {
+        frame++;
+        if (currentBiome === 'day' && score > 5000 && !isTransitioning) { currentBiome = 'night'; gameSpeed = 6; document.getElementById('status').innerText = "RE-ENTERING THE ALLEY"; }
+        const portalExists = gameObjects.some(o => o.file.includes('portal'));
+        if (score >= 2000 && currentBiome === 'night' && !portalExists && !isTransitioning) { let p = new GameObject('snack'); p.file = 'snack-portal.png'; p.img.src = BASE_URL+p.file; gameObjects.push(p); }
+        if (frame % 80 === 0 && !portalExists) gameObjects.push(new GameObject(Math.random()>0.4?'obstacle':'snack'));
+        if (isJumping) { jumpHeight -= yVelocity; yVelocity += 1.2; if (jumpHeight <= 0) { jumpHeight = 0; isJumping = false; jumpCount = 0; } }
+        gameObjects.forEach((o, i) => { o.update(); if (o.x < -300) gameObjects.splice(i,1); });
+        document.getElementById('scoreDisplay').innerText = `SCORE: ${score}`;
+    }
+
+    drawBackground();
+    particles.forEach((p, i) => { p.x += p.vX; p.y += p.vY; p.life -= 0.02; ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 4, 4); if (p.life <= 0) particles.splice(i,1); });
+    ctx.globalAlpha = 1; lori.draw(); azul.draw(); mochkil.draw();
+    if (isTransitioning) { let a = 1 - (frame-portalFrame)/60; if (a>0) { ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.fillRect(0,0,canvas.width,canvas.height); } }
+    ctx.restore();
+
+    if (gameState !== 'PLAYING') {
+        ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle = "#0ff"; ctx.textAlign = "center"; ctx.font = "24px Courier";
+        ctx.fillText(gameState === 'START' ? "MAXIMUM REALITY" : "CONNECTION LOST", canvas.width/2, canvas.height/2 - 20);
+        ctx.fillText("TAP TO CONNECT", canvas.width/2, canvas.height/2 + 20);
+    }
+    requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>
