@@ -43,7 +43,7 @@
    git clone https://github.com/maximumreality/cyber-alley.git
    https://maximumreality.github.io/match/
 
-📂 File structure:
+#📂 File structure:
 cyber-alley/
 │
 ├─ index.html          # Main game HTML
