@@ -41,3 +41,54 @@
 1. Clone or download the repository:
    ```bash
    git clone https://github.com/maximumreality/cyber-alley.git
+   https://maximumreality.github.io/match/
+   📂 File 
+   cyber-alley/
+│
+├─ index.html          # Main game HTML
+├─ css/
+│   └─ styles.css      # Optional additional styling
+├─ js/
+│   └─ game.js         # Game logic (if separated)
+├─ assets/
+│   ├─ gg-bg.png
+│   ├─ building-a.png
+│   ├─ building-b.png
+│   ├─ ...
+│   └─ futuristic-cyberpunk-industrial-music.mp3
+
+🎨 Characters
+	•	Lori: Player character, agile runner.
+	•	Azul: Companion with a quantum shield that blocks one hit.
+	•	Mochkil: Mischievous secondary character with occasional animations.
+
+⸻
+
+🎵 Audio
+
+Background music file: futuristic-cyberpunk-industrial-music.mp3
+	•	Looping and can be muted/unmuted via the 🔊 button.
+
+⸻
+
+⚡ Notes
+	•	Game auto-resizes to fit the window.
+	•	Double jumps are allowed, and the player can interact with portals to change biomes.
+	•	The game starts in the START state. Tap to connect and begin playing.
+
+⸻
+
+📜 License
+
+All game assets and code are © Maximum Reality. Free for personal and arcade use; do not redistribute commercially without permission.
+
+⸻
+
+🔗 Links
+	•	Maximum Reality Homepage￼
+	•	Cyber Alley Game Demo￼
+
+
+
+
+   
